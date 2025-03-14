@@ -1,10 +1,9 @@
 package org.example
 
-import java.awt.*
-import java.awt.event.ActionEvent
-import java.awt.event.InputEvent
-import java.awt.event.KeyEvent
-import javax.swing.*
+import java.nio.file.Files
+import java.nio.file.Paths
+import javax.swing.JFrame
+import javax.swing.WindowConstants
 
 
 fun main() {

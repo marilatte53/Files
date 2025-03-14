@@ -17,8 +17,8 @@ import kotlin.io.path.*
 
 
 class FileView {
-    // TODO: sort _ before text
-    val STARTS_WITH_SEARCH = Predicate<Path> { it.name.startsWith(uiSearchBar.text, ignoreCase = true) }
+    val STARTS_WITH_SEARCH =
+        Predicate<Path> { it.name.startsWith(uiSearchBar.text, ignoreCase = true) }
     val CONTAINS_SEARCH = Predicate<Path> { it.name.contains(uiSearchBar.text, ignoreCase = true) }
     val FOCUS_FILE_LIST_ACTION = object : AbstractAction() {
         override fun actionPerformed(e: ActionEvent?) {
@@ -27,7 +27,7 @@ class FileView {
     }
     protected val robot = Robot()
 
-    protected var fileListComp = FileComparators.FILE_DIR.then(Comparator.naturalOrder())
+    protected var fileListComp = FileComparators.FILE_DIR.then(FileComparators.UNDERSCORE_FIRST).then(Comparator.naturalOrder())
     lateinit var currentDir: Path
         protected set
     protected var searchBarPredicate: Predicate<Path>? = null
@@ -95,7 +95,11 @@ class FileView {
                 val fileIcon = UIManager.getIcon("FileView.fileIcon")
 
                 override fun getListCellRendererComponent(
-                    list: JList<*>?, path: Any, index: Int, isSelected: Boolean, cellHasFocus: Boolean
+                    list: JList<*>?,
+                    path: Any,
+                    index: Int,
+                    isSelected: Boolean,
+                    cellHasFocus: Boolean
                 ): Component {
                     val label = super.getListCellRendererComponent(
                         list,
@@ -112,10 +116,16 @@ class FileView {
                 }
             }
         (uiSearchBar.document as AbstractDocument).documentFilter = object : DocumentFilter() {
-            override fun replace(fb: FilterBypass?, offset: Int, length: Int, text: String?, attrs: AttributeSet?) {
+            override fun replace(
+                fb: FilterBypass?,
+                offset: Int,
+                length: Int,
+                text: String?,
+                attrs: AttributeSet?
+            ) {
                 val oldText = uiSearchBar.text
                 super.replace(fb, offset, length, text, attrs)
-                // TODO: display all but sort startswith first
+                // TODO: display all but sort startswith first OR only use contains-search 
                 if (Files.list(currentDir).filter(STARTS_WITH_SEARCH).findFirst().isPresent) {
                     searchBarPredicate = STARTS_WITH_SEARCH
                     updateFileList()
@@ -150,14 +160,20 @@ class FileView {
         })
         uiRoot.layout = BorderLayout()
         val rootInputMap = uiRoot.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
-        rootInputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_L, InputEvent.CTRL_DOWN_MASK), "focusAddressBar")
+        rootInputMap.put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_L, InputEvent.CTRL_DOWN_MASK),
+            "focusAddressBar"
+        )
         uiRoot.actionMap.put("focusAddressBar", object : AbstractAction() {
             override fun actionPerformed(e: ActionEvent?) {
                 uiAddressBar.requestFocusInWindow()
                 uiAddressBar.selectAll()
             }
         })
-        rootInputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_S, InputEvent.CTRL_DOWN_MASK), "focusSearchBar")
+        rootInputMap.put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_S, InputEvent.CTRL_DOWN_MASK),
+            "focusSearchBar"
+        )
         uiRoot.actionMap.put("focusSearchBar", object : AbstractAction() {
             override fun actionPerformed(e: ActionEvent?) {
                 uiSearchBar.requestFocusInWindow()
