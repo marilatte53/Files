@@ -27,13 +27,14 @@ class FileView {
     }
     protected val robot = Robot()
 
-    protected var fileListComp = FileComparators.FILE_DIR.then(FileComparators.UNDERSCORE_FIRST).then(Comparator.naturalOrder())
+    protected var fileListComp = FileComparators.FILE_DIR.then(FileComparators.UNDERSCORE_FIRST)
+        .then(Comparator.naturalOrder())
     lateinit var currentDir: Path
         protected set
     protected var searchBarPredicate: Predicate<Path>? = null
 
     val uiRoot: JPanel = JPanel()
-    val uiFileList: JList<Path> = JList() // TODO: use table instead
+    val uiFileList: JList<Path> = JList() // TODO: use table instead and add detail columns
     val uiListModel: DefaultListModel<Path> = DefaultListModel()
     val uiAddressBar = JTextField()
     val uiSearchBar = JTextField()
@@ -44,7 +45,8 @@ class FileView {
         uiAddressBar.actionMap.put("dropFocus", FOCUS_FILE_LIST_ACTION)
         uiAddressBar.addFocusListener(object : FocusAdapter() {
             override fun focusLost(e: FocusEvent?) {
-                // TODO: actionlistener possible? -> should not change selected item in list
+                // TODO: bug: when this func is called but the directory stays the same, the selected element is not preserved
+                // either re-select it or check if the directory is already open
                 try {
                     val path = Paths.get(uiAddressBar.text)
                     if (path.exists() && path.isDirectory()) {
@@ -193,7 +195,7 @@ class FileView {
         val uiFileScroller = JScrollPane(uiFileList)
         uiFileScroller.horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
         uiRoot.add(uiFileScroller, BorderLayout.CENTER)
-        // TODO: add margin in rounded corners
+        // TODO: add margin in rounded corners FUCK WINDOWS 11 or just change the font?
         uiRoot.add(uiSearchBar, BorderLayout.SOUTH)
 
         setCurrentDir(Paths.get(System.getProperty("user.home")))
