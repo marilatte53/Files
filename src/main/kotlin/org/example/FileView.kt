@@ -2,6 +2,7 @@ package org.example
 
 import java.awt.BorderLayout
 import java.awt.Component
+import java.awt.EventQueue
 import java.awt.Font
 import java.awt.Robot
 import java.awt.event.*
@@ -175,14 +176,17 @@ class FileView {
         }
         uiSearchBar.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "dropFocus")
         uiSearchBar.actionMap.put("dropFocus", FOCUS_FILE_LIST_ACTION)
-        uiSearchBar.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "redirectEnter")
-        uiSearchBar.actionMap.put("redirectEnter", object : AbstractAction() {
-            override fun actionPerformed(e: ActionEvent?) {
-                // TODO: redirect other navigation key presses as well
-                // or redirect letters from file list
-                uiFileList.requestFocusInWindow()
-                robot.keyPress(KeyEvent.VK_ENTER)
-                robot.keyRelease(KeyEvent.VK_ENTER)
+        uiSearchBar.addKeyListener(object : KeyAdapter() {
+            override fun keyPressed(e: KeyEvent) {
+                val kc = e.extendedKeyCode
+                when (kc) { // make navigation keys work even when in search bar
+                    KeyEvent.VK_DOWN, KeyEvent.VK_UP, KeyEvent.VK_ENTER -> {
+                        uiFileList.dispatchEvent(e)
+                        // if enter, redirect the focus as well
+                        if (kc == KeyEvent.VK_ENTER)
+                            uiFileList.requestFocusInWindow()
+                    }
+                }
             }
         })
     }
