@@ -40,27 +40,41 @@ class FileView {
     val uiSearchBar = JTextField()
 
     init {
-        uiAddressBar.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "dropFocus")
-        uiAddressBar.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "dropFocus")
-        uiAddressBar.actionMap.put("dropFocus", FOCUS_FILE_LIST_ACTION)
-        uiAddressBar.addFocusListener(object : FocusAdapter() {
-            override fun focusLost(e: FocusEvent?) {
-                try {
-                    val path = Paths.get(uiAddressBar.text).absolute().normalize()
-                    if (path.exists() && path.isDirectory()) {
-                        if (!path.isSameFileAs(currentDir)) {
-                            setCurrentDir(path)
-                        }
-                        updateAddressBar()
-                        return
-                    }
-                } catch (_: Exception) {
-                }
+        initAddressBar()
+        initFileList()
+        initSearchBar()
+        uiRoot.layout = BorderLayout()
+        val rootInputMap = uiRoot.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+        rootInputMap.put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_L, InputEvent.CTRL_DOWN_MASK),
+            "focusAddressBar"
+        )
+        uiRoot.actionMap.put("focusAddressBar", object : AbstractAction() {
+            override fun actionPerformed(e: ActionEvent?) {
                 uiAddressBar.requestFocusInWindow()
-                updateAddressBar()
+                uiAddressBar.selectAll()
             }
         })
+        rootInputMap.put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_S, InputEvent.CTRL_DOWN_MASK),
+            "focusSearchBar"
+        )
+        uiRoot.actionMap.put("focusSearchBar", object : AbstractAction() {
+            override fun actionPerformed(e: ActionEvent?) {
+                uiSearchBar.requestFocusInWindow()
+            }
+        })
+        uiRoot.add(uiAddressBar, BorderLayout.NORTH)
+        val uiFileScroller = JScrollPane(uiFileList)
+        uiFileScroller.horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+        uiRoot.add(uiFileScroller, BorderLayout.CENTER)
+        // TODO: change the font?
+        uiRoot.add(uiSearchBar, BorderLayout.SOUTH)
 
+        setCurrentDir(Paths.get(System.getProperty("user.home")))
+    }
+
+    protected fun initFileList() {
         uiFileList.model = uiListModel
         uiFileList.font = Font("Calibri", Font.PLAIN, 15)
         uiFileList.selectedIndex = 0
@@ -118,6 +132,19 @@ class FileView {
                     return label
                 }
             }
+        uiFileList.addKeyListener(object : KeyAdapter() {
+            override fun keyPressed(e: KeyEvent) {
+                if (e.modifiersEx != 0 || !e.keyChar.isLetter())
+                    return
+                uiSearchBar.requestFocusInWindow()
+                // I, robot
+                robot.keyPress(e.extendedKeyCode)
+                robot.keyRelease(e.extendedKeyCode)
+            }
+        })
+    }
+
+    protected fun initSearchBar() {
         (uiSearchBar.document as AbstractDocument).documentFilter = object : DocumentFilter() {
             override fun replace(
                 fb: FilterBypass?,
@@ -129,17 +156,13 @@ class FileView {
                 val oldText = uiSearchBar.text
                 super.replace(fb, offset, length, text, attrs)
                 // TODO: display all but sort startswith first OR only use contains-search 
-                if (Files.list(currentDir).filter(STARTS_WITH_SEARCH).findFirst().isPresent) {
-                    searchBarPredicate = STARTS_WITH_SEARCH
-                    updateFileList()
+                val pred = simulateSearch()
+                if (pred == null) {
+                    uiSearchBar.text = oldText
                     return
                 }
-                if (Files.list(currentDir).filter(CONTAINS_SEARCH).findFirst().isPresent) {
-                    searchBarPredicate = CONTAINS_SEARCH
-                    updateFileList()
-                    return
-                }
-                uiSearchBar.text = oldText
+                searchBarPredicate = pred
+                updateFileList()
             }
 
             override fun remove(fb: FilterBypass?, offset: Int, length: Int) {
@@ -151,55 +174,48 @@ class FileView {
             }
         }
         uiSearchBar.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "dropFocus")
-        // TODO: keep selection
         uiSearchBar.actionMap.put("dropFocus", FOCUS_FILE_LIST_ACTION)
         uiSearchBar.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "redirectEnter")
         uiSearchBar.actionMap.put("redirectEnter", object : AbstractAction() {
             override fun actionPerformed(e: ActionEvent?) {
+                // TODO: redirect other navigation key presses as well
+                // or redirect letters from file list
                 uiFileList.requestFocusInWindow()
                 robot.keyPress(KeyEvent.VK_ENTER)
                 robot.keyRelease(KeyEvent.VK_ENTER)
             }
         })
-        uiRoot.layout = BorderLayout()
-        val rootInputMap = uiRoot.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
-        rootInputMap.put(
-            KeyStroke.getKeyStroke(KeyEvent.VK_L, InputEvent.CTRL_DOWN_MASK),
-            "focusAddressBar"
-        )
-        uiRoot.actionMap.put("focusAddressBar", object : AbstractAction() {
-            override fun actionPerformed(e: ActionEvent?) {
-                uiAddressBar.requestFocusInWindow()
-                uiAddressBar.selectAll()
-            }
-        })
-        rootInputMap.put(
-            KeyStroke.getKeyStroke(KeyEvent.VK_S, InputEvent.CTRL_DOWN_MASK),
-            "focusSearchBar"
-        )
-        uiRoot.actionMap.put("focusSearchBar", object : AbstractAction() {
-            override fun actionPerformed(e: ActionEvent?) {
-                uiSearchBar.requestFocusInWindow()
-            }
-        })
-        uiFileList.addKeyListener(object : KeyAdapter() {
-            override fun keyPressed(e: KeyEvent) {
-                if (e.modifiersEx != 0 || !e.keyChar.isLetter())
-                    return
-                uiSearchBar.requestFocusInWindow()
-                // I, robot
-                robot.keyPress(e.extendedKeyCode)
-                robot.keyRelease(e.extendedKeyCode)
-            }
-        })
-        uiRoot.add(uiAddressBar, BorderLayout.NORTH)
-        val uiFileScroller = JScrollPane(uiFileList)
-        uiFileScroller.horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
-        uiRoot.add(uiFileScroller, BorderLayout.CENTER)
-        // TODO: add margin in rounded corners FUCK WINDOWS 11 or just change the font?
-        uiRoot.add(uiSearchBar, BorderLayout.SOUTH)
+    }
 
-        setCurrentDir(Paths.get(System.getProperty("user.home")))
+    protected fun initAddressBar() {
+        uiAddressBar.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "dropFocus")
+        uiAddressBar.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "dropFocus")
+        uiAddressBar.actionMap.put("dropFocus", FOCUS_FILE_LIST_ACTION)
+        uiAddressBar.addFocusListener(object : FocusAdapter() {
+            override fun focusLost(e: FocusEvent?) {
+                try {
+                    val path = Paths.get(uiAddressBar.text).absolute().normalize()
+                    if (path.exists() && path.isDirectory()) {
+                        if (!path.isSameFileAs(currentDir)) {
+                            setCurrentDir(path)
+                        }
+                        updateAddressBar()
+                        return
+                    }
+                } catch (_: Exception) {
+                }
+                uiAddressBar.requestFocusInWindow()
+                updateAddressBar()
+            }
+        })
+    }
+
+    protected fun simulateSearch(): Predicate<Path>? {
+        if (Files.list(currentDir).filter(STARTS_WITH_SEARCH).findFirst().isPresent)
+            return STARTS_WITH_SEARCH
+        if (Files.list(currentDir).filter(CONTAINS_SEARCH).findFirst().isPresent)
+            searchBarPredicate = CONTAINS_SEARCH
+        return null
     }
 
     protected fun updateAddressBar() {
@@ -209,12 +225,15 @@ class FileView {
     fun updateFileList() {
         updateAddressBar()
 
+        val oldSel = uiFileList.selectedValue
         uiListModel.removeAllElements()
         val files = Files.list(currentDir).sorted(fileListComp).let {
             if (searchBarPredicate == null) it else it.filter(searchBarPredicate)
         }.toList()
         uiListModel.addAll(files)
-        uiFileList.selectedIndex = 0
+        uiFileList.setSelectedValue(oldSel, true)
+        if (uiFileList.selectedValue == null)
+            uiFileList.selectedIndex = 0
     }
 
     fun clearFilter() {
