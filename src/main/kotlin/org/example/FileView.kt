@@ -2,7 +2,6 @@ package org.example
 
 import java.awt.BorderLayout
 import java.awt.Component
-import java.awt.EventQueue
 import java.awt.Font
 import java.awt.Robot
 import java.awt.event.*
@@ -21,11 +20,7 @@ class FileView {
     val STARTS_WITH_SEARCH =
         Predicate<Path> { it.name.startsWith(uiSearchBar.text, ignoreCase = true) }
     val CONTAINS_SEARCH = Predicate<Path> { it.name.contains(uiSearchBar.text, ignoreCase = true) }
-    val FOCUS_FILE_LIST_ACTION = object : AbstractAction() {
-        override fun actionPerformed(e: ActionEvent?) {
-            uiFileList.requestFocusInWindow()
-        }
-    }
+    val FOCUS_FILE_LIST_ACTION = action { uiFileList.requestFocusInWindow() }
     protected val robot = Robot()
 
     protected var fileListComp = FileComparators.FILE_DIR.then(FileComparators.UNDERSCORE_FIRST)
@@ -50,21 +45,15 @@ class FileView {
             KeyStroke.getKeyStroke(KeyEvent.VK_L, InputEvent.CTRL_DOWN_MASK),
             "focusAddressBar"
         )
-        uiRoot.actionMap.put("focusAddressBar", object : AbstractAction() {
-            override fun actionPerformed(e: ActionEvent?) {
-                uiAddressBar.requestFocusInWindow()
-                uiAddressBar.selectAll()
-            }
-        })
+        uiRoot.actionMap.put("focusAddressBar") {
+            uiAddressBar.requestFocusInWindow()
+            uiAddressBar.selectAll()
+        }
         rootInputMap.put(
             KeyStroke.getKeyStroke(KeyEvent.VK_S, InputEvent.CTRL_DOWN_MASK),
             "focusSearchBar"
         )
-        uiRoot.actionMap.put("focusSearchBar", object : AbstractAction() {
-            override fun actionPerformed(e: ActionEvent?) {
-                uiSearchBar.requestFocusInWindow()
-            }
-        })
+        uiRoot.actionMap.put("focusSearchBar") { uiSearchBar.requestFocusInWindow() }
         uiRoot.add(uiAddressBar, BorderLayout.NORTH)
         val uiFileScroller = JScrollPane(uiFileList)
         uiFileScroller.horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
@@ -80,38 +69,28 @@ class FileView {
         uiFileList.font = Font("Calibri", Font.PLAIN, 15)
         uiFileList.selectedIndex = 0
         uiFileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "enterDir")
-        uiFileList.actionMap.put("enterDir", object : AbstractAction() {
-            override fun actionPerformed(e: ActionEvent) {
-                val p = uiFileList.selectedValue ?: return
-                if (!p.isDirectory())
-                    return
-                setCurrentDir(p)
-            }
-        })
+        uiFileList.actionMap.put("enterDir") {
+            val p = uiFileList.selectedValue ?: return@put
+            if (!p.isDirectory()) return@put
+            setCurrentDir(p)
+        }
         uiFileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_BACK_SPACE, 0), "leaveDir")
-        uiFileList.actionMap.put("leaveDir", object : AbstractAction() {
-            override fun actionPerformed(e: ActionEvent) {
-                if (currentDir.parent == null)
-                    return
-
-                val oldDir = currentDir
-                setCurrentDir(currentDir.parent)
-                uiFileList.setSelectedValue(oldDir, true)
-            }
-        })
+        uiFileList.actionMap.put("leaveDir") {
+            if (currentDir.parent == null) return@put
+            val oldDir = currentDir
+            setCurrentDir(currentDir.parent)
+            uiFileList.setSelectedValue(oldDir, true)
+        }
         uiFileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "dropFilters")
-        uiFileList.actionMap.put("dropFilters", object : AbstractAction() {
-            override fun actionPerformed(e: ActionEvent?) {
-                clearFilter()
-                updateFileList()
-            }
-        })
+        uiFileList.actionMap.put("dropFilters") {
+            clearFilter()
+            updateFileList()
+        }
+        val dirIcon = UIManager.getIcon("FileView.directoryIcon")
+        val fileIcon = UIManager.getIcon("FileView.fileIcon")
         uiFileList.cellRenderer =
             object : DefaultListCellRenderer() {
                 // TODO: better icons + more different icons
-                val dirIcon = UIManager.getIcon("FileView.directoryIcon")
-                val fileIcon = UIManager.getIcon("FileView.fileIcon")
-
                 override fun getListCellRendererComponent(
                     list: JList<*>?,
                     path: Any,
@@ -126,10 +105,11 @@ class FileView {
                         isSelected,
                         cellHasFocus
                     ) as JLabel
-                    if (path.isDirectory())
-                        label.icon = dirIcon
-                    else if (path.isRegularFile())
-                        label.icon = fileIcon
+                    when {
+                        path.isDirectory() -> label.icon = dirIcon
+                        path.isRegularFile() -> label.icon = fileIcon
+                        // TODO: link
+                    }
                     return label
                 }
             }
@@ -143,6 +123,19 @@ class FileView {
                 robot.keyRelease(e.extendedKeyCode)
             }
         })
+        uiFileList.inputMap.put(
+            KeyStroke.getKeyStroke(
+                KeyEvent.VK_N,
+                InputEvent.CTRL_DOWN_MASK or InputEvent.SHIFT_DOWN_MASK
+            ), "createDir"
+        )
+        uiFileList.actionMap.put("createDir") { userCreateDir() }
+        val ctxMenu = JPopupMenu("test")
+        val iCreateDir = JMenuItem("New Directory")
+        iCreateDir.addActionListener { userCreateDir() }
+        ctxMenu.add(iCreateDir)
+        uiFileList.componentPopupMenu = ctxMenu
+//        uiFileList.inheritsPopupMenu = true
     }
 
     protected fun initSearchBar() {
@@ -176,10 +169,10 @@ class FileView {
         }
         uiSearchBar.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "dropFocus")
         uiSearchBar.actionMap.put("dropFocus", FOCUS_FILE_LIST_ACTION)
+        // make navigation keys work even when in search bar
         uiSearchBar.addKeyListener(object : KeyAdapter() {
             override fun keyPressed(e: KeyEvent) {
-                val kc = e.extendedKeyCode
-                when (kc) { // make navigation keys work even when in search bar
+                when (val kc = e.extendedKeyCode) {
                     KeyEvent.VK_DOWN, KeyEvent.VK_UP, KeyEvent.VK_ENTER -> {
                         uiFileList.dispatchEvent(e)
                         // if enter, redirect the focus as well
@@ -195,6 +188,7 @@ class FileView {
         uiAddressBar.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "dropFocus")
         uiAddressBar.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "dropFocus")
         uiAddressBar.actionMap.put("dropFocus", FOCUS_FILE_LIST_ACTION)
+        // TODO: use document listener/filter?
         uiAddressBar.addFocusListener(object : FocusAdapter() {
             override fun focusLost(e: FocusEvent?) {
                 try {
@@ -212,6 +206,20 @@ class FileView {
                 updateAddressBar()
             }
         })
+    }
+
+    protected fun userCreateDir() {
+        val result =
+            JOptionPane.showInputDialog(null, "Directory name:", "Create Directory", JOptionPane.QUESTION_MESSAGE)
+        val newFile = currentDir.resolve(result)
+        if (newFile.isDirectory() && newFile.exists()) {
+            JOptionPane.showMessageDialog(
+                null,
+                "Directory already exists",
+                "Directory exists",
+                JOptionPane.WARNING_MESSAGE
+            )
+        }
     }
 
     protected fun simulateSearch(): Predicate<Path>? {
