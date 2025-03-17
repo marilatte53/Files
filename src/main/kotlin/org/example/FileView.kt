@@ -214,7 +214,7 @@ class FileView {
         if (Files.list(currentDir).filter(STARTS_WITH_SEARCH).findFirst().isPresent)
             return STARTS_WITH_SEARCH
         if (Files.list(currentDir).filter(CONTAINS_SEARCH).findFirst().isPresent)
-            searchBarPredicate = CONTAINS_SEARCH
+            return CONTAINS_SEARCH
         return null
     }
 
