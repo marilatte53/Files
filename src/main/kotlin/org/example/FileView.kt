@@ -45,18 +45,19 @@ class FileView {
         uiAddressBar.actionMap.put("dropFocus", FOCUS_FILE_LIST_ACTION)
         uiAddressBar.addFocusListener(object : FocusAdapter() {
             override fun focusLost(e: FocusEvent?) {
-                // TODO: bug: when this func is called but the directory stays the same, the selected element is not preserved
-                // either re-select it or check if the directory is already open
                 try {
-                    val path = Paths.get(uiAddressBar.text)
+                    val path = Paths.get(uiAddressBar.text).absolute().normalize()
                     if (path.exists() && path.isDirectory()) {
-                        setCurrentDir(path)
+                        if (!path.isSameFileAs(currentDir)) {
+                            setCurrentDir(path)
+                        }
+                        updateAddressBar()
                         return
                     }
                 } catch (_: Exception) {
                 }
-                updateAddressBar()
                 uiAddressBar.requestFocusInWindow()
+                updateAddressBar()
             }
         })
 
