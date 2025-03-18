@@ -2,9 +2,13 @@ package org.example
 
 import java.awt.BorderLayout
 import java.awt.Component
+import java.awt.Desktop
 import java.awt.Font
 import java.awt.Robot
 import java.awt.event.*
+import java.io.IOException
+import java.lang.UnsupportedOperationException
+import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -140,8 +144,10 @@ class FileView {
                 InputEvent.CTRL_DOWN_MASK or InputEvent.SHIFT_DOWN_MASK
             ), "createFile"
         )
+        uiFileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0), "deleteFile")
         uiFileList.actionMap.put("createDir") { userCreateDir() }
         uiFileList.actionMap.put("createFile") { userCreateFile() }
+        uiFileList.actionMap.put("deleteFile") { userDeleteFile() }
         val ctxMenu = JPopupMenu("test")
         val iCreateDir = JMenuItem("New Directory")
         iCreateDir.addActionListener { userCreateDir() }
@@ -247,12 +253,11 @@ class FileView {
             updateFileList()
             uiFileList.setSelectedValue(newDir, true)
         } catch (e: Exception) {
-            JOptionPane.showMessageDialog(
-                null,
-                "Error creating dir '${newDir.invariantSeparatorsPathString}'",
-                "Error creating dir",
-                JOptionPane.ERROR_MESSAGE
-            )
+            val msg = when (e) {
+                is FileAlreadyExistsException -> "Directory exists: '${e.message}'"
+                else -> "Unkown error: ${e.message}"
+            }
+            JOptionPane.showMessageDialog(null, msg, "Error creating dir", JOptionPane.ERROR_MESSAGE)
         }
     }
 
@@ -261,26 +266,51 @@ class FileView {
             JOptionPane.showInputDialog(null, "File name:", "Create File", JOptionPane.QUESTION_MESSAGE)
                 ?: return
         val newFile = currentDir.resolve(result)
-        if (!newFile.isDirectory() && newFile.exists()) {
-            JOptionPane.showMessageDialog(
-                null,
-                "File already exists",
-                "File exists",
-                JOptionPane.WARNING_MESSAGE
-            )
-            return
-        }
         try {
             newFile.createFile()
             updateFileList()
             uiFileList.setSelectedValue(newFile, true)
         } catch (e: Exception) {
-            JOptionPane.showMessageDialog(
-                null,
-                "Error creating file '${newFile.invariantSeparatorsPathString}'",
-                "Error creating file",
-                JOptionPane.ERROR_MESSAGE
-            )
+            val msg = when (e) {
+                is FileAlreadyExistsException -> "File already exists: '${e.message}'"
+                is AccessDeniedException -> "Access denied: '${e.message}'\n(there is probably a folder with this name)"
+                else -> "Unkown error: ${e.message}"
+            }
+            JOptionPane.showMessageDialog(null, msg, "Error creating file", JOptionPane.ERROR_MESSAGE)
+        }
+    }
+
+    @OptIn(ExperimentalPathApi::class)
+    protected fun userDeleteFile() {
+        val file = uiFileList.selectedValue ?: return
+        try {
+            if (isTrashSupported()) {
+                if (Desktop.getDesktop().moveToTrash(file.toFile())) {
+                    updateFileListAfterDeletion()
+                } else {
+                    JOptionPane.showMessageDialog(
+                        null,
+                        "Failed to move file to trash",
+                        "File deletion failed",
+                        JOptionPane.ERROR_MESSAGE
+                    )
+                }
+            } else {
+                val a = JOptionPane.showConfirmDialog(
+                    null,
+                    "Trash is not supported, delete file anyway?\n" +
+                            "This means that the file will not be recoverable",
+                    "Delete file?",
+                    JOptionPane.YES_NO_OPTION
+                )
+                if (a == JOptionPane.YES_OPTION) {
+                    file.deleteRecursively()
+                    updateFileListAfterDeletion()
+                }
+            }
+        } catch (e: IOException) {
+            val msg = "Unkown error: ${e.message}"
+            JOptionPane.showMessageDialog(null, msg, "Error creating file", JOptionPane.ERROR_MESSAGE)
         }
     }
 
@@ -294,6 +324,14 @@ class FileView {
 
     protected fun updateAddressBar() {
         uiAddressBar.text = currentDir.absolute().invariantSeparatorsPathString
+    }
+
+    fun updateFileListAfterDeletion() {
+        val ind = uiFileList.selectedIndex
+        updateFileList()
+        if (ind < uiFileList.model.size)
+            uiFileList.selectedIndex = ind
+        else uiFileList.selectedIndex = uiFileList.model.size - 1
     }
 
     fun updateFileList() {
