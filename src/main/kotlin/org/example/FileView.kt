@@ -141,7 +141,7 @@ class FileView {
     protected fun initSearchBar() {
         (uiSearchBar.document as AbstractDocument).documentFilter = object : DocumentFilter() {
             override fun replace(
-                fb: FilterBypass?,
+                fb: FilterBypass,
                 offset: Int,
                 length: Int,
                 text: String?,
@@ -149,10 +149,16 @@ class FileView {
             ) {
                 val oldText = uiSearchBar.text
                 super.replace(fb, offset, length, text, attrs)
+                /*
+                 Prevent an edge case where the search bar is set to empty while the directory is empty.
+                 This would lead to the filter text being reset to the old value
+                 */
+                if (uiSearchBar.text.isEmpty())
+                    return
                 // TODO: display all but sort startswith first OR only use contains-search 
                 val pred = simulateSearch()
-                if (pred == null) {
-                    uiSearchBar.text = oldText
+                if (pred == null) { // If the search doesn't find any files, reset it
+                    super.replace(fb, 0, fb.document.length, oldText, null)
                     return
                 }
                 searchBarPredicate = pred
@@ -161,9 +167,11 @@ class FileView {
 
             override fun remove(fb: FilterBypass?, offset: Int, length: Int) {
                 super.remove(fb, offset, length)
-                if (Files.list(currentDir).filter(STARTS_WITH_SEARCH).findFirst().isPresent)
-                    searchBarPredicate = STARTS_WITH_SEARCH
-                else searchBarPredicate = CONTAINS_SEARCH
+                val pred = simulateSearch()
+                if (pred == null) // If the search doesn't find any files, clear the filter
+                    super.remove(fb, 0, fb!!.document.length)
+                else
+                    searchBarPredicate = pred
                 updateFileList()
             }
         }
@@ -211,13 +219,27 @@ class FileView {
     protected fun userCreateDir() {
         val result =
             JOptionPane.showInputDialog(null, "Directory name:", "Create Directory", JOptionPane.QUESTION_MESSAGE)
-        val newFile = currentDir.resolve(result)
-        if (newFile.isDirectory() && newFile.exists()) {
+                ?: return
+        val newDir = currentDir.resolve(result)
+        if (newDir.isDirectory() && newDir.exists()) {
             JOptionPane.showMessageDialog(
                 null,
                 "Directory already exists",
                 "Directory exists",
                 JOptionPane.WARNING_MESSAGE
+            )
+            return
+        }
+        try {
+            newDir.createDirectory()
+            updateFileList()
+            uiFileList.setSelectedValue(newDir, true)
+        } catch (e: Exception) {
+            JOptionPane.showMessageDialog(
+                null,
+                "Error creating '${newDir.invariantSeparatorsPathString}'",
+                "Error creating dir",
+                JOptionPane.ERROR_MESSAGE
             )
         }
     }
@@ -254,8 +276,13 @@ class FileView {
     }
 
     fun setCurrentDir(path: Path, update: Boolean = true) {
-        this.currentDir = path
+        /*
+         Clear the filter first to avoid edge case: 
+         When the new directory is empty, the simulated search won't find any files,
+         so the search bar logic would reset the filter
+         */
         clearFilter()
+        this.currentDir = path
         if (update)
             updateFileList()
     }
