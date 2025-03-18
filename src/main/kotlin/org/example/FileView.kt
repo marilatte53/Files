@@ -8,6 +8,11 @@ import java.awt.event.*
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.nio.file.StandardOpenOption
+import java.nio.file.attribute.BasicFileAttributes
+import java.nio.file.attribute.FileAttribute
+import java.nio.file.attribute.FileOwnerAttributeView
+import java.nio.file.attribute.PosixFileAttributes
 import java.util.function.Predicate
 import javax.swing.*
 import javax.swing.text.AbstractDocument
@@ -126,10 +131,17 @@ class FileView {
         uiFileList.inputMap.put(
             KeyStroke.getKeyStroke(
                 KeyEvent.VK_N,
-                InputEvent.CTRL_DOWN_MASK or InputEvent.SHIFT_DOWN_MASK
+                InputEvent.CTRL_DOWN_MASK
             ), "createDir"
         )
+        uiFileList.inputMap.put(
+            KeyStroke.getKeyStroke(
+                KeyEvent.VK_N,
+                InputEvent.CTRL_DOWN_MASK or InputEvent.SHIFT_DOWN_MASK
+            ), "createFile"
+        )
         uiFileList.actionMap.put("createDir") { userCreateDir() }
+        uiFileList.actionMap.put("createFile") { userCreateFile() }
         val ctxMenu = JPopupMenu("test")
         val iCreateDir = JMenuItem("New Directory")
         iCreateDir.addActionListener { userCreateDir() }
@@ -237,8 +249,36 @@ class FileView {
         } catch (e: Exception) {
             JOptionPane.showMessageDialog(
                 null,
-                "Error creating '${newDir.invariantSeparatorsPathString}'",
+                "Error creating dir '${newDir.invariantSeparatorsPathString}'",
                 "Error creating dir",
+                JOptionPane.ERROR_MESSAGE
+            )
+        }
+    }
+
+    protected fun userCreateFile() {
+        val result =
+            JOptionPane.showInputDialog(null, "File name:", "Create File", JOptionPane.QUESTION_MESSAGE)
+                ?: return
+        val newFile = currentDir.resolve(result)
+        if (!newFile.isDirectory() && newFile.exists()) {
+            JOptionPane.showMessageDialog(
+                null,
+                "File already exists",
+                "File exists",
+                JOptionPane.WARNING_MESSAGE
+            )
+            return
+        }
+        try {
+            newFile.createFile()
+            updateFileList()
+            uiFileList.setSelectedValue(newFile, true)
+        } catch (e: Exception) {
+            JOptionPane.showMessageDialog(
+                null,
+                "Error creating file '${newFile.invariantSeparatorsPathString}'",
+                "Error creating file",
                 JOptionPane.ERROR_MESSAGE
             )
         }
