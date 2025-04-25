@@ -1,22 +1,14 @@
 package org.example
 
-import java.awt.BorderLayout
-import java.awt.Component
-import java.awt.Desktop
-import java.awt.Font
-import java.awt.Robot
+import java.awt.*
+import java.awt.desktop.OpenFilesEvent
+import java.awt.desktop.OpenFilesHandler
 import java.awt.event.*
 import java.io.IOException
-import java.lang.UnsupportedOperationException
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.nio.file.StandardOpenOption
-import java.nio.file.attribute.BasicFileAttributes
-import java.nio.file.attribute.FileAttribute
-import java.nio.file.attribute.FileOwnerAttributeView
-import java.nio.file.attribute.PosixFileAttributes
 import java.util.function.Predicate
 import javax.swing.*
 import javax.swing.text.AbstractDocument
@@ -74,14 +66,22 @@ class FileView {
     }
 
     protected fun initFileList() {
-        uiFileList.model = uiListModel
         uiFileList.font = Font("Calibri", Font.PLAIN, 15)
+        uiFileList.model = uiListModel
         uiFileList.selectedIndex = 0
-        uiFileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "enterDir")
-        uiFileList.actionMap.put("enterDir") {
-            val p = uiFileList.selectedValue ?: return@put
-            if (!p.isDirectory()) return@put
-            setCurrentDir(p)
+        // Enter directory or open file with default application
+        uiFileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "openFile")
+        uiFileList.actionMap.put("openFile") {
+            val p = uiFileList.selectedValue?.absolute() ?: return@put
+            if (p.isDirectory()) {
+                setCurrentDir(p)
+            } else {
+                if (!Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+                    Desktop.getDesktop().edit(p.toFile())
+                } else {
+                    ProcessBuilder("cmd.exe", "/C", "start", p.absolutePathString()).start()
+                }
+            }
         }
         uiFileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_BACK_SPACE, 0), "leaveDir")
         uiFileList.actionMap.put("leaveDir") {
