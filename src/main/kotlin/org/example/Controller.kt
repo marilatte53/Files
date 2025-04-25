@@ -1,8 +1,6 @@
 package org.example
 
 import java.awt.*
-import java.awt.desktop.OpenFilesEvent
-import java.awt.desktop.OpenFilesHandler
 import java.awt.event.*
 import java.io.IOException
 import java.nio.file.FileAlreadyExistsException
@@ -16,8 +14,9 @@ import javax.swing.text.AttributeSet
 import javax.swing.text.DocumentFilter
 import kotlin.io.path.*
 
+class Controller {
+    val storage = Persistence(Path.of("files_explorer_persistence"))
 
-class FileView {
     val STARTS_WITH_SEARCH =
         Predicate<Path> { it.name.startsWith(uiSearchBar.text, ignoreCase = true) }
     val CONTAINS_SEARCH = Predicate<Path> { it.name.contains(uiSearchBar.text, ignoreCase = true) }
@@ -62,7 +61,17 @@ class FileView {
         // TODO: change the font?
         uiRoot.add(uiSearchBar, BorderLayout.SOUTH)
 
-        setCurrentDir(Paths.get(System.getProperty("user.home")))
+        val stateRead = storage.read()
+        setCurrentDir(stateRead.currentDir)
+        Runtime.getRuntime().addShutdownHook(Thread(::runOnShutdown))
+    }
+
+    protected fun runOnShutdown() {
+        storage.write(getState())
+    }
+
+    fun getState(): ExplorerState {
+        return ExplorerState(currentDir)
     }
 
     protected fun initFileList() {
@@ -310,7 +319,7 @@ class FileView {
             }
         } catch (e: IOException) {
             val msg = "Unkown error: ${e.message}"
-            JOptionPane.showMessageDialog(null, msg, "Error creating file", JOptionPane.ERROR_MESSAGE)
+            JOptionPane.showMessageDialog(null, msg, "Error deleting file", JOptionPane.ERROR_MESSAGE)
         }
     }
 
