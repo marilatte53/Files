@@ -4,7 +4,7 @@ import javax.swing.JFrame
 import javax.swing.WindowConstants
 
 fun main() {
-    val view = Controller()
+    val view = ExplorerController()
     
     val frame = JFrame()
     frame.setSize(900, 600)

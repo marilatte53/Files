@@ -1,1 +1,2 @@
 currentDir=C:/Users/maril
+selectedFile=.ssh

@@ -14,8 +14,12 @@ import javax.swing.text.AttributeSet
 import javax.swing.text.DocumentFilter
 import kotlin.io.path.*
 
-class Controller {
-    val storage = Persistence(Path.of("files_explorer_persistence"))
+class ExplorerController {
+    companion object {
+        fun getDefaultDir() = System.getProperty("user.dir")
+    }
+
+    val storage = Persistence(Paths.get("files_explorer_persistence"))
 
     val STARTS_WITH_SEARCH =
         Predicate<Path> { it.name.startsWith(uiSearchBar.text, ignoreCase = true) }
@@ -61,8 +65,12 @@ class Controller {
         // TODO: change the font?
         uiRoot.add(uiSearchBar, BorderLayout.SOUTH)
 
+        // TODO: use the state class as model; remove currentDir; externalize the ui
         val stateRead = storage.read()
         setCurrentDir(stateRead.currentDir)
+        // attempt to select correct dir
+        val selInd = uiListModel.indexOf(stateRead.selectedDir)
+        if (selInd > 0) uiFileList.selectedIndex = selInd
         Runtime.getRuntime().addShutdownHook(Thread(::runOnShutdown))
     }
 
@@ -71,8 +79,10 @@ class Controller {
     }
 
     fun getState(): ExplorerState {
-        return ExplorerState(currentDir)
+        return ExplorerState(currentDir, selectedFile())
     }
+
+    protected fun selectedFile(): Path? = uiFileList.selectedValue
 
     protected fun initFileList() {
         uiFileList.font = Font("Calibri", Font.PLAIN, 15)
@@ -81,7 +91,7 @@ class Controller {
         // Enter directory or open file with default application
         uiFileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "openFile")
         uiFileList.actionMap.put("openFile") {
-            val p = uiFileList.selectedValue?.absolute() ?: return@put
+            val p = selectedFile()?.absolute() ?: return@put
             if (p.isDirectory()) {
                 setCurrentDir(p)
             } else {
@@ -344,14 +354,33 @@ class Controller {
     }
 
     fun updateFileList() {
-        updateAddressBar()
-
         val oldSel = uiFileList.selectedValue
         uiListModel.removeAllElements()
-        val files = Files.list(currentDir).sorted(fileListComp).let {
+        val files =
+            try {
+                Files.list(currentDir)
+            } catch (e: Exception) {
+                println("INFO: ${e::class.simpleName} Cannot list files in currentDir ('$currentDir'): ${e.message}")
+                val fallbackStr = getDefaultDir()
+                println("INFO: Trying fallback dir ('$fallbackStr')")
+                try {
+                    val fallback = Paths.get(fallbackStr)
+                    this.currentDir = fallback
+                    val tmp = Files.list(fallback)
+                    println("INFO: Fallback directory was successful")
+                    tmp
+                } catch (e: Exception) {
+                    // We're screwed
+                    println("FATAL: Fallback failed")
+                    println("INFO: The file list could not be updated. Try changing the directory manually or restarting the application")
+                    return
+                }
+            }
+        updateAddressBar()
+        val filesUsable = files.sorted(fileListComp).let {
             if (searchBarPredicate == null) it else it.filter(searchBarPredicate)
         }.toList()
-        uiListModel.addAll(files)
+        uiListModel.addAll(filesUsable)
         uiFileList.setSelectedValue(oldSel, true)
         if (uiFileList.selectedValue == null)
             uiFileList.selectedIndex = 0
@@ -362,9 +391,10 @@ class Controller {
         searchBarPredicate = null
     }
 
+    // TODO: this is never used with false
     fun setCurrentDir(path: Path, update: Boolean = true) {
         /*
-         Clear the filter first to avoid edge case: 
+         Clear the filter first for consistent behaviour: 
          When the new directory is empty, the simulated search won't find any files,
          so the search bar logic would reset the filter
          */

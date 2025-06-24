@@ -1,0 +1,61 @@
+# Custom Explorer App
+
+## Not done
+- persistence
+    - histories
+    - other settings in the future
+- multiple views
+    - 2 default
+    - tab to switch views
+    - ? add '..' at the top of folder view; when entering dir, select first entry?
+- navigation:
+    - telescope dirs: hotkey? do we count files? -> two hotkeys?
+    - favorites
+    - hotkey to a certain favorite (sort of a default location)
+    - switch drives
+- modification:
+    - CTRL+C, CTRL+V, CTRL+X
+    - F2 to rename file, move up & down while renaming
+- selection:
+    - default selection behaviour
+    - when pressing space, introduce a second selection layer -> only these count
+    - cache selections when leaving dirs??
+- history:
+    - save navigation history
+    - use ALT + left/right to navigate history
+    - search histories??
+- advanced search:
+    - CTRL+F
+    - regex ALT+X
+    - match case ALT+C
+    - presets: e.g. images with file endings
+- view modes:
+    - folded: default
+    - tree: left/right to (un-)fold directories and view files in them, hotkeys to affect entire dir
+    - flat: view all files in all subdirectories
+    https://www.comp.nus.edu.sg/~cs3283/ftp/Java/swingConnect/tech_topics/tables-trees/tables-trees.html
+- context menu:
+    - default from windows
+    - adjust manually
+- batch renaming tool
+
+## Done
+- navigation:
+    - up & down
+    - address bar, focus with CTRL+L
+    - backspace to leave dir
+    - enter:
+        - enter dir
+        - execute/open file
+- search by typing
+    - exit with ESC, clear with ESC again
+    - first try startsWith search, fall back to contains search
+    - CTRL+S hotkey
+- modification:
+    - create directory with CTRL+N
+    - create file with CTRL+SHIFT+N
+    - move file to bin with DEL, no confirmation
+- persistence
+    - local storage
+    - previously opened dir
+    - (selected dir)
