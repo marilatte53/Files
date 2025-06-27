@@ -56,7 +56,9 @@ class Persistence(
         val currentDir = Paths.get(stateMap.get(KEY_CURRENT_DIR) ?: ExplorerController.getDefaultDir())
         // In case this is not present, it will get fixed at the initial update call in Controller
         val selectedDir = stateMap.get(KEY_SELECTED_FILE)?.let { currentDir.resolve(it) }
-        return ExplorerState(currentDir, selectedDir)
+        val state = ExplorerState(currentDir, selectedDir)
+        state.sanitize()
+        return state
     }
 
     // TODO: error handling, logging
@@ -67,7 +69,7 @@ class Persistence(
         if (!(Files.exists(versionFile) && Files.isRegularFile(versionFile))) versionFile.createFile()
         versionFile.writeText("1.0")
         if (!(Files.exists(stateFile) && Files.isRegularFile(stateFile))) stateFile.createFile()
-        val sSelectedDir = state.selectedDir?.let {
+        val sSelectedDir = state.selectedFile?.let {
             state.currentDir.relativize(it).invariantSeparatorsPathString
         }.orEmpty() // use orEmpty() otherwise 'null' will be stored as string
         Files.newBufferedWriter(stateFile).use {

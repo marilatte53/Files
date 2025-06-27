@@ -10,20 +10,20 @@
     - ? add '..' at the top of folder view; when entering dir, select first entry?
 - navigation:
     - telescope dirs: hotkey? do we count files? -> two hotkeys?
-    - favorites
-    - hotkey to a certain favorite (sort of a default location)
-    - switch drives
+    - favorites (CTRL+D)
+    - hotkey to a certain favorite (= sort of a default location)
+    - switch drives (CTRL+SHIFT+D?)
 - modification:
     - CTRL+C, CTRL+V, CTRL+X
+    - CTRL+Z (CTRL+Y)
     - F2 to rename file, move up & down while renaming
 - selection:
-    - default selection behaviour
-    - when pressing space, introduce a second selection layer -> only these count
+    - when pressing space, introduce a second selection layer -> only these count ???
     - cache selections when leaving dirs??
 - history:
     - save navigation history
     - use ALT + left/right to navigate history
-    - search histories??
+    - a 'search history'??
 - advanced search:
     - CTRL+F
     - regex ALT+X
@@ -35,8 +35,9 @@
     - flat: view all files in all subdirectories
     https://www.comp.nus.edu.sg/~cs3283/ftp/Java/swingConnect/tech_topics/tables-trees/tables-trees.html
 - context menu:
-    - default from windows
-    - adjust manually
+  - manual options
+  - open terminal
+  - open explorer?
 - batch renaming tool
 
 ## Done

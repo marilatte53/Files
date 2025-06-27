@@ -20,17 +20,17 @@ class ExplorerController {
     }
 
     val storage = Persistence(Paths.get("files_explorer_persistence"))
+    var state: ExplorerState
+        protected set
 
     val STARTS_WITH_SEARCH =
         Predicate<Path> { it.name.startsWith(uiSearchBar.text, ignoreCase = true) }
     val CONTAINS_SEARCH = Predicate<Path> { it.name.contains(uiSearchBar.text, ignoreCase = true) }
-    val FOCUS_FILE_LIST_ACTION = action { uiFileList.requestFocusInWindow() }
+    val ACTION_FOCUS_FILE_LIST = action { uiFileList.requestFocusInWindow() }
     protected val robot = Robot()
 
     protected var fileListComp = FileComparators.FILE_DIR.then(FileComparators.UNDERSCORE_FIRST)
         .then(Comparator.naturalOrder())
-    lateinit var currentDir: Path
-        protected set
     protected var searchBarPredicate: Predicate<Path>? = null
 
     val uiRoot: JPanel = JPanel()
@@ -66,23 +66,24 @@ class ExplorerController {
         uiRoot.add(uiSearchBar, BorderLayout.SOUTH)
 
         // TODO: use the state class as model; remove currentDir; externalize the ui
-        val stateRead = storage.read()
-        setCurrentDir(stateRead.currentDir)
-        // attempt to select correct dir
-        val selInd = uiListModel.indexOf(stateRead.selectedDir)
-        if (selInd > 0) uiFileList.selectedIndex = selInd
+        this.state = storage.read()
+        updateFromState()
         Runtime.getRuntime().addShutdownHook(Thread(::runOnShutdown))
     }
 
+    protected fun updateFromState() {
+        setCurrentDir(state.currentDir)
+        val selFile = selectedFile()
+        // attempt to select correct file
+        val selInd = uiListModel.indexOf(selFile)
+        if (selInd > 0) uiFileList.selectedIndex = selInd
+    }
+
     protected fun runOnShutdown() {
-        storage.write(getState())
+        storage.write(state)
     }
 
-    fun getState(): ExplorerState {
-        return ExplorerState(currentDir, selectedFile())
-    }
-
-    protected fun selectedFile(): Path? = uiFileList.selectedValue
+    protected fun selectedFile(): Path? = state.selectedFile
 
     protected fun initFileList() {
         uiFileList.font = Font("Calibri", Font.PLAIN, 15)
@@ -104,9 +105,10 @@ class ExplorerController {
         }
         uiFileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_BACK_SPACE, 0), "leaveDir")
         uiFileList.actionMap.put("leaveDir") {
-            if (currentDir.parent == null) return@put
-            val oldDir = currentDir
-            setCurrentDir(currentDir.parent)
+            // TODO: func in controller; leaveCurrentDir ?
+            if (state.currentDir.parent == null) return@put // In case the current dir is a drive 
+            val oldDir = state.currentDir
+            setCurrentDir(state.currentDir.parent)
             uiFileList.setSelectedValue(oldDir, true)
         }
         uiFileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "dropFilters")
@@ -213,7 +215,7 @@ class ExplorerController {
             }
         }
         uiSearchBar.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "dropFocus")
-        uiSearchBar.actionMap.put("dropFocus", FOCUS_FILE_LIST_ACTION)
+        uiSearchBar.actionMap.put("dropFocus", ACTION_FOCUS_FILE_LIST)
         // make navigation keys work even when in search bar
         uiSearchBar.addKeyListener(object : KeyAdapter() {
             override fun keyPressed(e: KeyEvent) {
@@ -232,16 +234,15 @@ class ExplorerController {
     protected fun initAddressBar() {
         uiAddressBar.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "dropFocus")
         uiAddressBar.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "dropFocus")
-        uiAddressBar.actionMap.put("dropFocus", FOCUS_FILE_LIST_ACTION)
+        uiAddressBar.actionMap.put("dropFocus", ACTION_FOCUS_FILE_LIST)
         // TODO: use document listener/filter?
         uiAddressBar.addFocusListener(object : FocusAdapter() {
             override fun focusLost(e: FocusEvent?) {
                 try {
                     val path = Paths.get(uiAddressBar.text).absolute().normalize()
                     if (path.exists() && path.isDirectory()) {
-                        if (!path.isSameFileAs(currentDir)) {
-                            setCurrentDir(path)
-                        }
+                        // TODO: Why is there an if here? It's probably good to allow manual refreshing of the current dir
+                        if (!path.isSameFileAs(state.currentDir)) setCurrentDir(path)
                         updateAddressBar()
                         return
                     }
@@ -257,7 +258,7 @@ class ExplorerController {
         val result =
             JOptionPane.showInputDialog(null, "Directory name:", "Create Directory", JOptionPane.QUESTION_MESSAGE)
                 ?: return
-        val newDir = currentDir.resolve(result)
+        val newDir = state.currentDir.resolve(result)
         if (newDir.isDirectory() && newDir.exists()) {
             JOptionPane.showMessageDialog(
                 null,
@@ -284,7 +285,7 @@ class ExplorerController {
         val result =
             JOptionPane.showInputDialog(null, "File name:", "Create File", JOptionPane.QUESTION_MESSAGE)
                 ?: return
-        val newFile = currentDir.resolve(result)
+        val newFile = state.currentDir.resolve(result)
         try {
             newFile.createFile()
             updateFileList()
@@ -333,16 +334,22 @@ class ExplorerController {
         }
     }
 
+    // TODO: probably just do both searches and append the exclusive results of the second one
+    //  (split the first list and only search the second half)
     protected fun simulateSearch(): Predicate<Path>? {
-        if (Files.list(currentDir).filter(STARTS_WITH_SEARCH).findFirst().isPresent)
+        if (Files.list(state.currentDir).filter(STARTS_WITH_SEARCH).findFirst().isPresent)
             return STARTS_WITH_SEARCH
-        if (Files.list(currentDir).filter(CONTAINS_SEARCH).findFirst().isPresent)
+        if (Files.list(state.currentDir).filter(CONTAINS_SEARCH).findFirst().isPresent)
             return CONTAINS_SEARCH
         return null
     }
 
+    /**
+     * Updates the address bar from the state. This should be called to have consistent paths. For example when the
+     * user appends a '/' to the path, it should still show the same address
+     */
     protected fun updateAddressBar() {
-        uiAddressBar.text = currentDir.absolute().invariantSeparatorsPathString
+        uiAddressBar.text = state.currentDir.absolute().invariantSeparatorsPathString
     }
 
     fun updateFileListAfterDeletion() {
@@ -358,14 +365,14 @@ class ExplorerController {
         uiListModel.removeAllElements()
         val files =
             try {
-                Files.list(currentDir)
+                Files.list(state.currentDir)
             } catch (e: Exception) {
-                println("INFO: ${e::class.simpleName} Cannot list files in currentDir ('$currentDir'): ${e.message}")
+                println("INFO: ${e::class.simpleName} Cannot list files in currentDir ('${state.currentDir}'): ${e.message}")
                 val fallbackStr = getDefaultDir()
                 println("INFO: Trying fallback dir ('$fallbackStr')")
                 try {
                     val fallback = Paths.get(fallbackStr)
-                    this.currentDir = fallback
+                    state.currentDir = fallback
                     val tmp = Files.list(fallback)
                     println("INFO: Fallback directory was successful")
                     tmp
@@ -391,17 +398,17 @@ class ExplorerController {
         searchBarPredicate = null
     }
 
-    // TODO: this is never used with false
-    fun setCurrentDir(path: Path, update: Boolean = true) {
+    // TODO: do we need this to be public? GUI should probably call other methods and state should never call this either
+    fun setCurrentDir(path: Path) {
         /*
          Clear the filter first for consistent behaviour: 
          When the new directory is empty, the simulated search won't find any files,
          so the search bar logic would reset the filter
          */
+        // TODO: we should be able to call clearFilter after the setter so we can extract it together with update into the GUI class
         clearFilter()
-        this.currentDir = path
-        if (update)
-            updateFileList()
+        this.state.currentDir = path
+        updateFileList()
     }
 
     fun focus() {
