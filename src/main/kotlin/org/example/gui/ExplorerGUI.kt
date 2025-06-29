@@ -8,7 +8,6 @@ import org.example.put
 import java.awt.*
 import java.awt.event.*
 import java.io.IOException
-import java.nio.file.Files
 import java.nio.file.Path
 import java.util.function.Predicate
 import java.util.stream.Collectors
@@ -22,29 +21,36 @@ class ExplorerGUI(
     val controller: ExplorerController
 ) {
     val STARTS_WITH_FILTER =
-        Predicate<Path> { it.name.startsWith(searchBar.text, ignoreCase = true) }
-    val CONTAINS_FILTER = Predicate<Path> { it.name.contains(searchBar.text, ignoreCase = true) }
+        Predicate<Path> { it.name.startsWith(filterBar.text, ignoreCase = true) }
+    val CONTAINS_FILTER = Predicate<Path> { it.name.contains(filterBar.text, ignoreCase = true) }
     val ACTION_FOCUS_FILE_LIST = action { fileList.requestFocusInWindow() }
     protected val robot = Robot()
 
     protected var fileListComp = FileComparators.FILE_DIR.then(FileComparators.UNDERSCORE_FIRST)
         .then(Comparator.naturalOrder())
-    protected var searchBarPredicate: Predicate<Path>? = null
 
     val rootPanel: JPanel = JPanel()
     val fileList: JList<Path> = JList() // TODO: use table instead and add detail columns
     val fileListModel: DefaultListModel<Path> = DefaultListModel()
     val addressBar = JTextField()
 
-    /**
-     * The bar at the bottom, used to search for files
-     */
-    val searchBar = JTextField()
+    /** The text field at the bottom, used to filter files */
+    val filterBar = JTextField()
+
+    /** a little hack */
+    protected var filter: String?
+        set(value) {
+            this.filterBar.text = value
+        }
+        get() = this.filterBar.text
+
+    /** Stores the previous filter text in the time between a filter update and a file list update */
+    var previousFilter: String? = null
 
     init {
         initAddressBar()
         initFileList()
-        initSearchBar()
+        initFilterBar()
         rootPanel.layout = BorderLayout()
         val rootInputMap = rootPanel.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
         rootInputMap.put(
@@ -57,15 +63,15 @@ class ExplorerGUI(
         }
         rootInputMap.put(
             KeyStroke.getKeyStroke(KeyEvent.VK_S, InputEvent.CTRL_DOWN_MASK),
-            "focusSearchBar"
+            "focusFilterBar"
         )
-        rootPanel.actionMap.put("focusSearchBar") { searchBar.requestFocusInWindow() }
+        rootPanel.actionMap.put("focusFilterBar") { filterBar.requestFocusInWindow() }
         rootPanel.add(addressBar, BorderLayout.NORTH)
         val uiFileScroller = JScrollPane(fileList)
         uiFileScroller.horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
         rootPanel.add(uiFileScroller, BorderLayout.CENTER)
         // TODO: change the font?
-        rootPanel.add(searchBar, BorderLayout.SOUTH)
+        rootPanel.add(filterBar, BorderLayout.SOUTH)
     }
 
     protected fun initFileList() {
@@ -79,7 +85,7 @@ class ExplorerGUI(
         fileList.actionMap.put("leaveDir") { controller.leaveCurrentDir() }
         fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "dropFilters")
         fileList.actionMap.put("dropFilters") {
-            clearSearchBar()
+            clearFilterBar()
             controller.updateFileList()
         }
         val dirIcon = UIManager.getIcon("FileView.directoryIcon")
@@ -113,7 +119,7 @@ class ExplorerGUI(
             override fun keyPressed(e: KeyEvent) {
                 if (e.modifiersEx != 0 || !e.keyChar.isLetter())
                     return
-                searchBar.requestFocusInWindow()
+                filterBar.requestFocusInWindow()
                 // I, robot
                 robot.keyPress(e.extendedKeyCode)
                 robot.keyRelease(e.extendedKeyCode)
@@ -143,48 +149,47 @@ class ExplorerGUI(
 //        uiFileList.inheritsPopupMenu = true
     }
 
-    protected fun initSearchBar() {
-        (searchBar.document as AbstractDocument).documentFilter = object : DocumentFilter() {
+    protected fun initFilterBar() {
+        // TODO: maybe test this; just check the filter when updated and reset if needed
+//        filterBar.document.addDocumentListener(object : DocumentListener {
+//            override fun insertUpdate(e: DocumentEvent?) {
+//                TODO("Not yet implemented")
+//            }
+//
+//            override fun removeUpdate(e: DocumentEvent?) {
+//                TODO("Not yet implemented")
+//            }
+//
+//            override fun changedUpdate(e: DocumentEvent) {
+//                e.getChange(e.document.defaultRootElement)
+//                TODO("Not yet implemented")
+//            }
+//
+//        })
+        (filterBar.document as AbstractDocument).documentFilter = object : DocumentFilter() {
             override fun replace(
-                fb: FilterBypass,
+                fb: FilterBypass?,
                 offset: Int,
                 length: Int,
                 text: String?,
                 attrs: AttributeSet?
             ) {
-                val oldText = searchBar.text
-                super.replace(fb, offset, length, text, attrs)
-                /*
-                 Prevent an edge case where the search bar is set to empty while the directory is empty.
-                 This would lead to the filter text being reset to the old value
-                 */
-                if (searchBar.text.isEmpty())
-                    return
-                controller.updateFileList()
-                // TODO: they should be sorted, so still simulate the search but extract logic from updateFileList to do so
-                val searchedFiles = Files.list(controller.currentDir())
-                    .collect(Collectors.partitioningBy { STARTS_WITH_FILTER.test(it) })
-                    .also { list -> list[false] = list[false]?.filter { file -> CONTAINS_FILTER.test(file) } }
-                if (pred == null) { // If the search doesn't find any files, reset it
-                    super.replace(fb, 0, fb.document.length, oldText, null)
-                    return
-                }
+                // Store the old filter in case the new one doesn't find anything
+                this@ExplorerGUI.previousFilter = filterBar.text
+                super.replace(fb, offset, length, text, attrs) // actually change the filter text
+                controller.updateFileList(null) // reload the file list, the rest is automatically handled by this
             }
 
             override fun remove(fb: FilterBypass?, offset: Int, length: Int) {
+                this@ExplorerGUI.previousFilter = filterBar.text
                 super.remove(fb, offset, length)
-                val pred = simulateSearch(controller.currentDir())
-                if (pred == null) // If the search doesn't find any files, clear the filter
-                    super.remove(fb, 0, fb!!.document.length)
-                else
-                    searchBarPredicate = pred
                 controller.updateFileList()
             }
         }
-        searchBar.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "dropFocus")
-        searchBar.actionMap.put("dropFocus", ACTION_FOCUS_FILE_LIST)
-        // make navigation keys work even when in search bar
-        searchBar.addKeyListener(object : KeyAdapter() {
+        filterBar.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "dropFocus")
+        filterBar.actionMap.put("dropFocus", ACTION_FOCUS_FILE_LIST)
+        // make navigation keys work even when in filter bar
+        filterBar.addKeyListener(object : KeyAdapter() {
             override fun keyPressed(e: KeyEvent) {
                 when (val kc = e.extendedKeyCode) {
                     KeyEvent.VK_DOWN, KeyEvent.VK_UP, KeyEvent.VK_ENTER -> {
@@ -281,29 +286,56 @@ class ExplorerGUI(
     fun updateFileListAfterDeletion() {
         val ind = fileList.selectedIndex
         updateFileList(controller.state)
-        if (ind < fileList.model.size)
-            fileList.selectedIndex = ind
+        if (ind < fileList.model.size) fileList.selectedIndex = ind
         else fileList.selectedIndex = fileList.model.size - 1
     }
 
     fun selectedFile(): Path? = fileList.selectedValue
 
-    fun updateFileList(state: ExplorerState, newSelection: Path? = null) {
-        /*
-         Clear the filter first for consistent behaviour: 
-         When the new directory is empty, the simulated search won't find any files,
-         so the search bar logic would reset the filter
-         */
-        clearSearchBar()
-        fileListModel.removeAllElements()
+    fun makeFileListUsable(rawFiles: List<Path>): List<Path> {
+        val usableFiles =
+            // Filter files by primary filter
+            rawFiles.stream().let { fileList ->
+                // don't do unnecessary work
+                if (filter.isNullOrEmpty()) fileList
+                fileList.collect(Collectors.groupingBy { file ->
+                    if (STARTS_WITH_FILTER.test(file)) 0
+                    else if (CONTAINS_FILTER.test(file)) return@groupingBy 1
+                    else -1 // this represents files that are filtered out by the search
+                })!!.filter { it.key >= 0 }.entries.sortedBy { it.key }.flatMap { it.value }
+            }.sortedWith(fileListComp)
+        return usableFiles
+    }
 
+    /**
+     * @param trySelect try to select this value after updating the list. If null, try to preserve the previous
+     *    selection
+     * @param clearSelection when this is true, clear the selection and ignore newSelection
+     */
+    fun updateFileList(state: ExplorerState, trySelect: Path? = null, clearSelection: Boolean = false) {
         updateAddressBar(state.currentDir)
-        // TODO: extract this and use it for search logic
-        val filesUsable = state.cachedFileList.stream().sorted(fileListComp).let {
-            if (searchBarPredicate == null) it else it.filter(searchBarPredicate)
-        }.toList()
-        fileListModel.addAll(filesUsable)
-        trySelectInFileList(newSelection)
+        var files = makeFileListUsable(state.cachedFileList)
+        if (!filter.isNullOrEmpty() && files.isEmpty()) { // Is the current filter invalid?
+            // -> try the previous filter
+            this.filter = previousFilter
+            // in case of file system changes, we need to validate the old filter again
+            files = makeFileListUsable(state.cachedFileList)
+            if (!filter.isNullOrEmpty() && files.isEmpty()) {// old filter is invalid too
+                // -> clear the filter
+                this.filter = null
+                // and of course get the files again
+                files = makeFileListUsable(state.cachedFileList)
+            }
+        }
+        // clear the previous filter, since it has been 'used up'
+        previousFilter = null
+        val previousSelection = selectedFile()
+        fileListModel.removeAllElements()
+        fileListModel.addAll(files)
+        val newSel =
+            if (clearSelection) null
+            else trySelect ?: previousSelection
+        trySelectInFileList(newSel)
     }
 
     fun trySelectInFileList(path: Path?): Boolean {
@@ -314,14 +346,11 @@ class ExplorerGUI(
         return false
     }
 
-    fun clearSearchBar() {
-        searchBar.text = ""
-        searchBarPredicate = null
+    fun clearFilterBar() {
+        filterBar.text = ""
     }
 
-    /**
-     * Currently this is only used in Main
-     */
+    /** Currently this is only used in Main */
     fun focusFileList() {
         fileList.requestFocusInWindow()
     }

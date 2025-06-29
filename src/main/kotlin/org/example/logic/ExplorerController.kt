@@ -113,7 +113,7 @@ class ExplorerController {
      * @param newSelection default is current dir. So if we just want to refresh the file list, we don't need to pass
      * anything
      */
-    fun updateFileList(newSelection: Path? = state.currentDir) {
+    fun updateFileList(newSelection: Path? = null) {
         val files =
             try {
                 Files.list(state.currentDir)
@@ -136,7 +136,7 @@ class ExplorerController {
         state.cachedFileList = files.toList()
         gui.updateFileList(state, newSelection)
     }
-    
+
     fun currentDir() = state.currentDir
 
     /**
