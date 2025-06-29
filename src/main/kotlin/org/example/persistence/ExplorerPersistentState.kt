@@ -11,5 +11,5 @@ class ExplorerPersistentState(
     /**
      * Relative path from currentDir
      */
-    val selectedFile: Path?
+    val selectedPath: Path?
 )

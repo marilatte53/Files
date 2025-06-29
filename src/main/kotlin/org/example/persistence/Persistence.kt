@@ -1,7 +1,6 @@
 package org.example.persistence
 
 import org.example.logic.ExplorerController
-import org.example.logic.ExplorerState
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -70,7 +69,7 @@ class Persistence(
         if (!(Files.exists(versionFile) && Files.isRegularFile(versionFile))) versionFile.createFile()
         versionFile.writeText("1.0")
         if (!(Files.exists(stateFile) && Files.isRegularFile(stateFile))) stateFile.createFile()
-        val sSelectedDir = state.selectedFile?.let {
+        val sSelectedDir = state.selectedPath?.let {
             state.currentDir.relativize(it).invariantSeparatorsPathString
         }.orEmpty() // use orEmpty() otherwise 'null' will be stored as string
         Files.newBufferedWriter(stateFile).use {

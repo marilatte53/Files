@@ -1,13 +1,10 @@
 package org.example.gui
 
 import org.example.action
-import org.example.isTrashSupported
 import org.example.logic.ExplorerController
-import org.example.logic.ExplorerState
 import org.example.put
 import java.awt.*
 import java.awt.event.*
-import java.io.IOException
 import java.nio.file.Path
 import java.util.function.Predicate
 import java.util.stream.Collectors
@@ -80,9 +77,9 @@ class ExplorerGUI(
         fileList.selectedIndex = 0
         // Enter directory or open file with default application
         fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "openFile")
-        fileList.actionMap.put("openFile") { controller.openFileOrEnterDir(selectedFile()) }
+        fileList.actionMap.put("openFile") { controller.openFileOrEnterDir(selectedPath()) }
         fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_BACK_SPACE, 0), "leaveDir")
-        fileList.actionMap.put("leaveDir") { controller.leaveCurrentDir() }
+        fileList.actionMap.put("leaveDir") { controller.tryLeaveCurrentDir() }
         fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "dropFilters")
         fileList.actionMap.put("dropFilters") {
             clearFilterBar()
@@ -137,10 +134,10 @@ class ExplorerGUI(
                 InputEvent.CTRL_DOWN_MASK or InputEvent.SHIFT_DOWN_MASK
             ), "createFile"
         )
-        fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0), "deleteFile")
+        fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0), "deletePath")
         fileList.actionMap.put("createDir") { userCreateDir() }
         fileList.actionMap.put("createFile") { userCreateFile() }
-        fileList.actionMap.put("deleteFile") { userDeleteFile() }
+        fileList.actionMap.put("deletePath") { userDeletePath() }
         val ctxMenu = JPopupMenu("test")
         val iCreateDir = JMenuItem("New Directory")
         iCreateDir.addActionListener { userCreateDir() }
@@ -150,22 +147,6 @@ class ExplorerGUI(
     }
 
     protected fun initFilterBar() {
-        // TODO: maybe test this; just check the filter when updated and reset if needed
-//        filterBar.document.addDocumentListener(object : DocumentListener {
-//            override fun insertUpdate(e: DocumentEvent?) {
-//                TODO("Not yet implemented")
-//            }
-//
-//            override fun removeUpdate(e: DocumentEvent?) {
-//                TODO("Not yet implemented")
-//            }
-//
-//            override fun changedUpdate(e: DocumentEvent) {
-//                e.getChange(e.document.defaultRootElement)
-//                TODO("Not yet implemented")
-//            }
-//
-//        })
         (filterBar.document as AbstractDocument).documentFilter = object : DocumentFilter() {
             override fun replace(
                 fb: FilterBypass?,
@@ -177,7 +158,7 @@ class ExplorerGUI(
                 // Store the old filter in case the new one doesn't find anything
                 this@ExplorerGUI.previousFilter = filterBar.text
                 super.replace(fb, offset, length, text, attrs) // actually change the filter text
-                controller.updateFileList(null) // reload the file list, the rest is automatically handled by this
+                controller.updateFileList() // reload the file list, the rest is automatically handled by this
             }
 
             override fun remove(fb: FilterBypass?, offset: Int, length: Int) {
@@ -243,39 +224,43 @@ class ExplorerGUI(
         }
     }
 
-    @OptIn(ExperimentalPathApi::class)
-    protected fun userDeleteFile() {
-        // TODO
-        val file = fileList.selectedValue ?: return
-        try {
-            if (isTrashSupported()) {
-                if (Desktop.getDesktop().moveToTrash(file.toFile())) {
-                    updateFileListAfterDeletion()
-                } else {
-                    JOptionPane.showMessageDialog(
-                        null,
-                        "Failed to move file to trash",
-                        "File deletion failed",
-                        JOptionPane.ERROR_MESSAGE
-                    )
-                }
-            } else {
-                val a = JOptionPane.showConfirmDialog(
-                    null,
-                    "Trash is not supported, delete file anyway?\n" +
-                            "This means that the file will not be recoverable",
-                    "Delete file?",
-                    JOptionPane.YES_NO_OPTION
-                )
-                if (a == JOptionPane.YES_OPTION) {
-                    file.deleteRecursively()
-                    updateFileListAfterDeletion()
-                }
-            }
-        } catch (e: IOException) {
-            val msg = "Unkown error: ${e.message}"
-            JOptionPane.showMessageDialog(null, msg, "Error deleting file", JOptionPane.ERROR_MESSAGE)
+    protected fun userDeletePath() {
+        // TODO: fix selection
+        // try to select the entry after the deleted one. If there is none, select the one before
+        // for the future: have a method that simulates the deletion and select accordingly
+        val fileList = makeFileListUsable(controller.fileList()).toMutableList()
+        val selectedPath = selectedPath() ?: return
+        var selectionIndex: Int = fileList.indexOf(selectedPath)
+        if (selectionIndex < 0 || !fileList.remove(selectedPath)) { // should never happen since the selection has to be in the list
+            println("FATAL: Trying to delete '${selectedPath.invariantSeparatorsPathString}', but path is not in file list!")
+            return
         }
+        if(selectionIndex >= fileList.size) // check if the new index is valid
+            selectionIndex = fileList.size - 1
+        controller.tryDeletePath(selectedPath, fileList[selectionIndex])
+    }
+
+    fun showDeletionFailedDialog(path: Path) {
+        JOptionPane.showMessageDialog(
+            null,
+            "Failed to delete '${path.invariantSeparatorsPathString}'",
+            "Failed to delete",
+            JOptionPane.ERROR_MESSAGE
+        )
+    }
+
+    fun showExceptionDialog(e: Exception) {
+        val msg = "${e::class.simpleName}: ${e.message}"
+        JOptionPane.showMessageDialog(null, msg, "Failed to create file", JOptionPane.ERROR_MESSAGE)
+    }
+
+    fun confirmTrashNotSupportedDialog(): Boolean {
+        return JOptionPane.showConfirmDialog(
+            null,
+            "Trash is not supported, delete file anyway?\nThis means that the file will not be recoverable",
+            "Delete file?",
+            JOptionPane.YES_NO_OPTION
+        ) == JOptionPane.YES_OPTION
     }
 
     fun updateAddressBar(currentDir: Path) {
@@ -285,12 +270,12 @@ class ExplorerGUI(
     // TODO
     fun updateFileListAfterDeletion() {
         val ind = fileList.selectedIndex
-        updateFileList(controller.state)
+        updateFileList()
         if (ind < fileList.model.size) fileList.selectedIndex = ind
         else fileList.selectedIndex = fileList.model.size - 1
     }
 
-    fun selectedFile(): Path? = fileList.selectedValue
+    fun selectedPath(): Path? = fileList.selectedValue
 
     fun makeFileListUsable(rawFiles: List<Path>): List<Path> {
         val usableFiles =
@@ -312,24 +297,24 @@ class ExplorerGUI(
      *    selection
      * @param clearSelection when this is true, clear the selection and ignore newSelection
      */
-    fun updateFileList(state: ExplorerState, trySelect: Path? = null, clearSelection: Boolean = false) {
-        updateAddressBar(state.currentDir)
-        var files = makeFileListUsable(state.cachedFileList)
+    fun updateFileList(trySelect: Path? = null, clearSelection: Boolean = false) {
+        updateAddressBar(controller.currentDir())
+        var files = makeFileListUsable(controller.fileList())
         if (!filter.isNullOrEmpty() && files.isEmpty()) { // Is the current filter invalid?
             // -> try the previous filter
             this.filter = previousFilter
             // in case of file system changes, we need to validate the old filter again
-            files = makeFileListUsable(state.cachedFileList)
+            files = makeFileListUsable(controller.fileList())
             if (!filter.isNullOrEmpty() && files.isEmpty()) {// old filter is invalid too
                 // -> clear the filter
                 this.filter = null
                 // and of course get the files again
-                files = makeFileListUsable(state.cachedFileList)
+                files = makeFileListUsable(controller.fileList())
             }
         }
         // clear the previous filter, since it has been 'used up'
         previousFilter = null
-        val previousSelection = selectedFile()
+        val previousSelection = selectedPath()
         fileListModel.removeAllElements()
         fileListModel.addAll(files)
         val newSel =

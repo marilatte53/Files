@@ -1,10 +1,11 @@
 package org.example.logic
 
 import org.example.gui.ExplorerGUI
+import org.example.isTrashSupported
 import org.example.persistence.ExplorerPersistentState
 import org.example.persistence.Persistence
 import java.awt.Desktop
-import java.nio.file.FileAlreadyExistsException
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -16,8 +17,7 @@ class ExplorerController {
         fun getDefaultDir(): String = System.getProperty("user.dir")
     }
 
-    var state: ExplorerState
-        protected set
+    protected var state: ExplorerState
     var gui: ExplorerGUI
         protected set
     val persistence = Persistence(Paths.get("files_explorer_persistence"))
@@ -70,7 +70,32 @@ class ExplorerController {
         return false
     }
 
-    fun leaveCurrentDir() {
+    @OptIn(ExperimentalPathApi::class)
+    fun tryDeletePath(path: Path? = null, trySelect: Path? = null) {
+        if (path == null) return
+        try {
+            if (isTrashSupported()) {
+                if (!Desktop.getDesktop().moveToTrash(path.toFile())) {
+                    gui.showDeletionFailedDialog(path)
+                    return
+                }
+            } else {
+                if (!gui.confirmTrashNotSupportedDialog())
+                    return
+                try {
+                    path.deleteRecursively()
+                } catch (e: IOException) {
+                    gui.showDeletionFailedDialog(path)
+                    return
+                }
+            }
+            updateFileList(trySelect)
+        } catch (e: Exception) {
+            gui.showExceptionDialog(e)
+        }
+    }
+
+    fun tryLeaveCurrentDir() {
         if (state.currentDir.parent == null) return // In case the current dir is a drive 
         val oldDir = state.currentDir
         state.currentDir = state.currentDir.parent
@@ -111,7 +136,7 @@ class ExplorerController {
      * Reload the file list from disk and adjust the GUI accordingly
      *
      * @param newSelection default is current dir. So if we just want to refresh the file list, we don't need to pass
-     * anything
+     *    anything
      */
     fun updateFileList(newSelection: Path? = null) {
         val files =
@@ -134,25 +159,24 @@ class ExplorerController {
             }
         // Do we actually need this? Leave it for now
         state.cachedFileList = files.toList()
-        gui.updateFileList(state, newSelection)
+        gui.updateFileList(newSelection)
     }
 
     fun currentDir() = state.currentDir
+    fun fileList() = state.cachedFileList
 
-    /**
-     * Set the current state and GUI state according to the PersistentState
-     */
+    /** Set the current state and GUI state according to the PersistentState */
     protected fun loadPersistentState(pState: ExplorerPersistentState) {
         val newState = ExplorerState(pState.currentDir)
         this.state = newState
         // This will update the GUI file list as well as selection
         updateFileList()
         // Adjust selection, in case this doesn't work, we already have a default selection
-        gui.trySelectInFileList(pState.selectedFile)
+        gui.trySelectInFileList(pState.selectedPath)
     }
 
     protected fun makePersistentState(): ExplorerPersistentState {
-        return ExplorerPersistentState(state.currentDir, gui.selectedFile())
+        return ExplorerPersistentState(state.currentDir, gui.selectedPath())
     }
 
     protected fun runOnShutdown() {
