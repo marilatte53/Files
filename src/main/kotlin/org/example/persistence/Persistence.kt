@@ -1,5 +1,7 @@
-package org.example
+package org.example.persistence
 
+import org.example.logic.ExplorerController
+import org.example.logic.ExplorerState
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -17,7 +19,7 @@ class Persistence(
 
     val stateFile = storagePath.resolve("explorer_state.txt")
 
-    fun read(): ExplorerState {
+    fun read(): ExplorerPersistentState {
         // TODO: Maybe check the version file???
         val stateMap = mutableMapOf<String, String?>()
         println("DEBUG: Checking state file '${stateFile.invariantSeparatorsPathString}'")
@@ -35,11 +37,11 @@ class Persistence(
                 val lineSplit = lineUsable.split("=", limit = 2)
                 val key = lineSplit[0]
                 if (key.isBlank()) {
-                    println("INFO: Line $i has an empty key (empty string before '=') and will be skipped")
+                    println("DEBUG: Line $i has an empty key (empty string before '=') and will be skipped")
                     continue
                 }
                 val value = if (lineSplit.size < 2) {
-                    println("INFO: Line $i has no value assigned (no '=' found)")
+                    println("DEBUG: Line $i has no value assigned (no '=' found), will be set to null")
                     null
                 } else {
                     lineSplit[1]
@@ -56,13 +58,12 @@ class Persistence(
         val currentDir = Paths.get(stateMap.get(KEY_CURRENT_DIR) ?: ExplorerController.getDefaultDir())
         // In case this is not present, it will get fixed at the initial update call in Controller
         val selectedDir = stateMap.get(KEY_SELECTED_FILE)?.let { currentDir.resolve(it) }
-        val state = ExplorerState(currentDir, selectedDir)
-        state.sanitize()
+        val state = ExplorerPersistentState(currentDir, selectedDir)
         return state
     }
 
     // TODO: error handling, logging
-    fun write(state: ExplorerState) {
+    fun write(state: ExplorerPersistentState) {
         Files.createDirectories(storagePath)
         val versionFile = storagePath.resolve("version.txt")
         // TODO: Techically we should have a lock file but oh well. Only use it for single operations tho, so we can have multiple instances of the app
