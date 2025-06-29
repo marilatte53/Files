@@ -38,6 +38,7 @@
   - manual options
   - open terminal
   - open explorer?
+  - fix the location when using the context menu key?
 - batch renaming tool
 
 ## Done
