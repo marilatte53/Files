@@ -191,7 +191,6 @@ class ExplorerGUI(
         addressBar.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "dropFocus")
         addressBar.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "dropFocus")
         addressBar.actionMap.put("dropFocus", ACTION_FOCUS_FILE_LIST)
-        // TODO: use document listener/filter?
         addressBar.addFocusListener(object : FocusAdapter() {
             override fun focusLost(e: FocusEvent?) {
                 confirmAddressBar()
@@ -270,14 +269,6 @@ class ExplorerGUI(
     /** set the text in the address bar */
     fun setAddress(currentDir: Path) {
         addressBar.text = currentDir.absolute().invariantSeparatorsPathString
-    }
-
-    // TODO
-    fun updateFileListAfterDeletion() {
-        val ind = fileList.selectedIndex
-        updateFileList()
-        if (ind < fileList.model.size) fileList.selectedIndex = ind
-        else fileList.selectedIndex = fileList.model.size - 1
     }
 
     fun selectedPath(): Path? = fileList.selectedValue
