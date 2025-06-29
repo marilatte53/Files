@@ -9,7 +9,6 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import javax.swing.JOptionPane
 import kotlin.io.path.*
 
 class ExplorerController {
@@ -59,9 +58,8 @@ class ExplorerController {
         try {
             val newDir = Paths.get(path).absolute().normalize()
             if (newDir.exists() && newDir.isDirectory()) {
-                val oldDir = state.currentDir
                 state.currentDir = newDir
-                updateFileList(oldDir) // In case we didn't change directory, passing oldDir will maintain the selection
+                updateFileList()
                 return true
             }
         } catch (_: Exception) {

@@ -3,7 +3,10 @@ package org.example.gui
 import org.example.action
 import org.example.logic.ExplorerController
 import org.example.put
-import java.awt.*
+import java.awt.BorderLayout
+import java.awt.Component
+import java.awt.Font
+import java.awt.Robot
 import java.awt.event.*
 import java.nio.file.Path
 import java.util.function.Predicate
@@ -20,7 +23,7 @@ class ExplorerGUI(
     val STARTS_WITH_FILTER =
         Predicate<Path> { it.name.startsWith(filterBar.text, ignoreCase = true) }
     val CONTAINS_FILTER = Predicate<Path> { it.name.contains(filterBar.text, ignoreCase = true) }
-    val ACTION_FOCUS_FILE_LIST = action { fileList.requestFocusInWindow() }
+    val ACTION_FOCUS_FILE_LIST = action { confirmAddressBar() }
     protected val robot = Robot()
 
     protected var fileListComp = FileComparators.FILE_DIR.then(FileComparators.UNDERSCORE_FIRST)
@@ -189,15 +192,17 @@ class ExplorerGUI(
         addressBar.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "dropFocus")
         addressBar.actionMap.put("dropFocus", ACTION_FOCUS_FILE_LIST)
         // TODO: use document listener/filter?
-        addressBar.addFocusListener(object : FocusAdapter() { // Pressing enter will also call this apparently
+        addressBar.addFocusListener(object : FocusAdapter() {
             override fun focusLost(e: FocusEvent?) {
-                // On lost focus try to enter the specified directory
-                if (!controller.tryEnterDir(addressBar.text)) {
-                    addressBar.requestFocusInWindow()
-                    controller.updateFileList()
-                }
+                confirmAddressBar()
             }
         })
+    }
+
+    /** The address bar has changed and now we need to update the file list accordingly */
+    protected fun confirmAddressBar() {
+        if (!controller.tryEnterDir(addressBar.text)) controller.updateFileList()
+        fileList.requestFocusInWindow()
     }
 
     protected fun userCreateDir() {
@@ -225,9 +230,8 @@ class ExplorerGUI(
     }
 
     protected fun userDeletePath() {
-        // TODO: fix selection
         // try to select the entry after the deleted one. If there is none, select the one before
-        // for the future: have a method that simulates the deletion and select accordingly
+        // In the future it will be possible to delete multiple selected files. So we already implement this here:
         val fileList = makeFileListUsable(controller.fileList()).toMutableList()
         val selectedPath = selectedPath() ?: return
         var selectionIndex: Int = fileList.indexOf(selectedPath)
@@ -235,7 +239,7 @@ class ExplorerGUI(
             println("FATAL: Trying to delete '${selectedPath.invariantSeparatorsPathString}', but path is not in file list!")
             return
         }
-        if(selectionIndex >= fileList.size) // check if the new index is valid
+        if (selectionIndex >= fileList.size) // check if the new index is valid
             selectionIndex = fileList.size - 1
         controller.tryDeletePath(selectedPath, fileList[selectionIndex])
     }
@@ -263,7 +267,8 @@ class ExplorerGUI(
         ) == JOptionPane.YES_OPTION
     }
 
-    fun updateAddressBar(currentDir: Path) {
+    /** set the text in the address bar */
+    fun setAddress(currentDir: Path) {
         addressBar.text = currentDir.absolute().invariantSeparatorsPathString
     }
 
@@ -298,7 +303,7 @@ class ExplorerGUI(
      * @param clearSelection when this is true, clear the selection and ignore newSelection
      */
     fun updateFileList(trySelect: Path? = null, clearSelection: Boolean = false) {
-        updateAddressBar(controller.currentDir())
+        setAddress(controller.currentDir())
         var files = makeFileListUsable(controller.fileList())
         if (!filter.isNullOrEmpty() && files.isEmpty()) { // Is the current filter invalid?
             // -> try the previous filter
