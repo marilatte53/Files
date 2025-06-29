@@ -23,7 +23,7 @@ class ExplorerGUI(
     val STARTS_WITH_FILTER =
         Predicate<Path> { it.name.startsWith(filterBar.text, ignoreCase = true) }
     val CONTAINS_FILTER = Predicate<Path> { it.name.contains(filterBar.text, ignoreCase = true) }
-    val ACTION_FOCUS_FILE_LIST = action { confirmAddressBar() }
+    val ACTION_FOCUS_FILE_LIST = action { fileList.requestFocusInWindow() }
     protected val robot = Robot()
 
     protected var fileListComp = FileComparators.FILE_DIR.then(FileComparators.UNDERSCORE_FIRST)
@@ -79,13 +79,13 @@ class ExplorerGUI(
         fileList.model = fileListModel
         fileList.selectedIndex = 0
         // Enter directory or open file with default application
-        fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "openFile")
-        fileList.actionMap.put("openFile") { controller.openFileOrEnterDir(selectedPath()) }
+        fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "openPath")
+        fileList.actionMap.put("openPath") { controller.openFileOrEnterDir(selectedPath()) }
         fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_BACK_SPACE, 0), "leaveDir")
         fileList.actionMap.put("leaveDir") { controller.tryLeaveCurrentDir() }
         fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "dropFilters")
         fileList.actionMap.put("dropFilters") {
-            clearFilterBar()
+            this.filter = null
             controller.updateFileList()
         }
         val dirIcon = UIManager.getIcon("FileView.directoryIcon")
@@ -320,15 +320,11 @@ class ExplorerGUI(
     }
 
     fun trySelectInFileList(path: Path?): Boolean {
-        // Don't bother checking for null, this function will handle it. Will also fix selection in case it's invalid
+        // Don't bother checking for null, setSelectedValue will handle it
         fileList.setSelectedValue(path, true)
         if (fileList.selectedValue != null) return true
         fileList.selectedIndex = 0
         return false
-    }
-
-    fun clearFilterBar() {
-        filterBar.text = ""
     }
 
     /** Currently this is only used in Main */

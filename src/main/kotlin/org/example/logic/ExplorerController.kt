@@ -37,6 +37,8 @@ class ExplorerController {
 
     fun openFileOrEnterDir(path: Path?) {
         val p = path?.absolute() ?: return
+        if(!p.exists())
+            return
         if (p.isDirectory()) {
             state.currentDir = p
             updateFileList()
@@ -62,9 +64,9 @@ class ExplorerController {
                 updateFileList()
                 return true
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            gui.showExceptionDialog(e)
         }
-        // TODO: More information? The dir probably didn't exist or the path is terrbily malformed
         return false
     }
 
