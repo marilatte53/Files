@@ -28,16 +28,17 @@ class ExplorerController {
         try {
             val readState = persistence.read()
             loadPersistentState(readState)
+            state.favoriteList.add(ExplorerFavoriteEntry("Home", Paths.get("c:\\Users\\Mario\\")))
         } catch (e: Exception) {
-            updateFileList() // This is also called when loadPersistent state is successful
             println("INFO: Failed to read state file, using default state")
+            updateFileList() // This is also called when loadPersistent state is successful
         }
         Runtime.getRuntime().addShutdownHook(Thread(::runOnShutdown))
     }
 
     fun openFileOrEnterDir(path: Path?) {
         val p = path?.absolute() ?: return
-        if(!p.exists())
+        if (!p.exists())
             return
         if (p.isDirectory()) {
             state.currentDir = p
@@ -56,9 +57,9 @@ class ExplorerController {
      *
      * @return true if we could enter, false otherwise
      */
-    fun tryEnterDir(path: String): Boolean {
+    fun tryEnterDir(path: Path): Boolean {
         try {
-            val newDir = Paths.get(path).absolute().normalize()
+            val newDir = path.absolute().normalize()
             if (newDir.exists() && newDir.isDirectory()) {
                 state.currentDir = newDir
                 updateFileList()
@@ -66,6 +67,7 @@ class ExplorerController {
             }
         } catch (e: Exception) {
             gui.showExceptionDialog(e)
+            e.printStackTrace()
         }
         return false
     }
@@ -157,13 +159,13 @@ class ExplorerController {
                     return
                 }
             }
-        // Do we actually need this? Leave it for now
         state.cachedFileList = files.toList()
         gui.updateFileList(newSelection)
     }
 
     fun currentDir() = state.currentDir
     fun fileList() = state.cachedFileList
+    fun favorites() = state.favoriteList
 
     /** Set the current state and GUI state according to the PersistentState */
     protected fun loadPersistentState(pState: ExplorerPersistentState) {
@@ -173,6 +175,7 @@ class ExplorerController {
         updateFileList()
         // Adjust selection, in case this doesn't work, we already have a default selection
         gui.trySelectInFileList(pState.selectedPath)
+        // TODO: load favorites
     }
 
     protected fun makePersistentState(): ExplorerPersistentState {

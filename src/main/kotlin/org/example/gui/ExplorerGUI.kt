@@ -20,6 +20,11 @@ import kotlin.io.path.*
 class ExplorerGUI(
     val controller: ExplorerController
 ) {
+    companion object {
+        val dirIcon = UIManager.getIcon("FileView.directoryIcon")
+        val fileIcon = UIManager.getIcon("FileView.fileIcon")
+    }
+    
     val STARTS_WITH_FILTER =
         Predicate<Path> { it.name.startsWith(filterBar.text, ignoreCase = true) }
     val CONTAINS_FILTER = Predicate<Path> { it.name.contains(filterBar.text, ignoreCase = true) }
@@ -48,24 +53,30 @@ class ExplorerGUI(
     var previousFilter: String? = null
 
     init {
-        initAddressBar()
         initFileList()
+        initAddressBar()
         initFilterBar()
         rootPanel.layout = BorderLayout()
         val rootInputMap = rootPanel.getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT)
+        // Key events that happen in any child of the rootPanel can be handled here #keybind
         rootInputMap.put(
             KeyStroke.getKeyStroke(KeyEvent.VK_L, InputEvent.CTRL_DOWN_MASK),
             "focusAddressBar"
+        )
+        rootInputMap.put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_S, InputEvent.CTRL_DOWN_MASK),
+            "focusFilterBar"
+        )
+        rootInputMap.put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_D, InputEvent.CTRL_DOWN_MASK),
+            "openFavorites"
         )
         rootPanel.actionMap.put("focusAddressBar") {
             addressBar.requestFocusInWindow()
             addressBar.selectAll()
         }
-        rootInputMap.put(
-            KeyStroke.getKeyStroke(KeyEvent.VK_S, InputEvent.CTRL_DOWN_MASK),
-            "focusFilterBar"
-        )
         rootPanel.actionMap.put("focusFilterBar") { filterBar.requestFocusInWindow() }
+        rootPanel.actionMap.put("openFavorites") { showFavoritesPopup(it) }
         rootPanel.add(addressBar, BorderLayout.NORTH)
         val uiFileScroller = JScrollPane(fileList)
         uiFileScroller.horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
@@ -88,8 +99,6 @@ class ExplorerGUI(
             this.filter = null
             controller.updateFileList()
         }
-        val dirIcon = UIManager.getIcon("FileView.directoryIcon")
-        val fileIcon = UIManager.getIcon("FileView.fileIcon")
         fileList.cellRenderer =
             object : DefaultListCellRenderer() {
                 // TODO: better icons + more different icons
@@ -198,9 +207,27 @@ class ExplorerGUI(
         })
     }
 
+    protected fun showFavoritesPopup(e: ActionEvent) {
+        val c = e.source
+        if (c !is Component)
+            return
+        val favoritesMenu = JPopupMenu("Favorites")
+        val favs = controller.favorites()
+        var i = 0
+        for (fav in favs) {
+            val favItem = JMenuItem()
+            favItem.action = action { controller.tryEnterDir(fav.path) }
+            favItem.text = fav.name
+            favItem.icon = dirIcon
+            if (i < 9) favItem.accelerator = KeyStroke.getKeyStroke('1' + i++)
+            favoritesMenu.add(favItem)
+        }
+        favoritesMenu.show(c, 0, 0)
+    }
+
     /** The address bar has changed and now we need to update the file list accordingly */
     protected fun confirmAddressBar() {
-        if (!controller.tryEnterDir(addressBar.text)) controller.updateFileList()
+        if (!controller.tryEnterDir(Path.of(addressBar.text))) controller.updateFileList()
         fileList.requestFocusInWindow()
     }
 
@@ -278,8 +305,8 @@ class ExplorerGUI(
             // Filter files by primary filter
             rawFiles.stream().let { fileList ->
                 // don't do unnecessary work
-                if (filter.isNullOrEmpty()) fileList
-                fileList.collect(Collectors.groupingBy { file ->
+                if (filter.isNullOrEmpty()) fileList.toList()
+                else fileList.collect(Collectors.groupingBy { file ->
                     if (STARTS_WITH_FILTER.test(file)) 0
                     else if (CONTAINS_FILTER.test(file)) return@groupingBy 1
                     else -1 // this represents files that are filtered out by the search
