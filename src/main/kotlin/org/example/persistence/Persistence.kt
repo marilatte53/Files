@@ -1,59 +1,40 @@
 package org.example.persistence
 
 import org.example.logic.ExplorerController
+import org.example.logic.ExplorerFavoriteEntry
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import kotlin.io.path.absolute
+import kotlin.io.path.createDirectories
 import kotlin.io.path.createFile
+import kotlin.io.path.exists
 import kotlin.io.path.invariantSeparatorsPathString
+import kotlin.io.path.isRegularFile
 import kotlin.io.path.writeText
 
 class Persistence(
     val storagePath: Path
 ) {
     companion object {
+        const val FILE_EXPLORER_STATE = "explorer_state.txt"
+        const val FILE_VERSION = "version.txt"
+        const val FILE_FAVORITES = "favorites.txt"
+
         const val KEY_CURRENT_DIR = "currentDir"
         const val KEY_SELECTED_FILE = "selectedFile"
     }
 
-    val stateFile = storagePath.resolve("explorer_state.txt")
+    val stateFile = storagePath.resolve(FILE_EXPLORER_STATE)
 
     fun read(): ExplorerPersistentState {
         // TODO: Maybe check the version file???
-        val stateMap = mutableMapOf<String, String?>()
         println("DEBUG: Checking state file '${stateFile.invariantSeparatorsPathString}'")
+        val stateMap = mutableMapOf<String, String?>()
         if (Files.exists(stateFile) && Files.isRegularFile(stateFile)) {
             println("DEBUG: State file found, proceeding to read")
-            val lines = Files.readAllLines(stateFile)
-            var i = 0
-            println("DEBUG: Read state file, converting raw strings")
-            for (lineStr in lines) {
-                val lineUsable = lineStr.trim()
-                if (lineUsable.isEmpty()) {
-                    println("DEBUG: Line $i is empty and will not be processed")
-                    continue
-                }
-                val lineSplit = lineUsable.split("=", limit = 2)
-                val key = lineSplit[0]
-                if (key.isBlank()) {
-                    println("DEBUG: Line $i has an empty key (empty string before '=') and will be skipped")
-                    continue
-                }
-                val value = if (lineSplit.size < 2) {
-                    println("DEBUG: Line $i has no value assigned (no '=' found), will be set to null")
-                    null
-                } else {
-                    lineSplit[1]
-                }
-                println("DEBUG: Read state value '$key=$value'")
-                stateMap.put(key, value)
-                i++
-            }
-            println("Done reading state file")
-        } else {
-            println("INFO: State file does not exist or is not a regular file")
-        }
-
+            convertKeyValueLines(stateMap, Files.readAllLines(stateFile))
+        } else println("INFO: State file does not exist or is not a regular file")
         val currentDir = Paths.get(stateMap.get(KEY_CURRENT_DIR) ?: ExplorerController.getDefaultDir())
         // In case this is not present, it will get fixed at the initial update call in Controller
         val selectedDir = stateMap.get(KEY_SELECTED_FILE)?.let { currentDir.resolve(it) }
@@ -61,10 +42,37 @@ class Persistence(
         return state
     }
 
+    fun convertKeyValueLines(buffer: MutableMap<String, String?>, lines: List<String>) {
+        var i = 0
+        println("DEBUG: Converting ${lines.size} key-value lines")
+        for (lineStr in lines) {
+            val lineUsable = lineStr.trim()
+            if (lineUsable.isEmpty()) {
+                println("DEBUG: Line $i/${lines.size} is empty and will not be processed")
+                continue
+            }
+            val lineSplit = lineUsable.split("=", limit = 2)
+            val key = lineSplit[0]
+            if (key.isBlank()) {
+                println("DEBUG: Line $i/${lines.size} has an empty key (empty string before '=') and will be skipped")
+                continue
+            }
+            val value = if (lineSplit.size < 2) {
+                println("DEBUG: Line $i/${lines.size} has no value assigned (no '=' found), will be set to null")
+                null
+            } else {
+                lineSplit[1]
+            }
+            println("DEBUG: Read state value '$key=$value'")
+            buffer.put(key, value)
+            i++
+        }
+    }
+
     // TODO: error handling, logging
     fun write(state: ExplorerPersistentState) {
         Files.createDirectories(storagePath)
-        val versionFile = storagePath.resolve("version.txt")
+        val versionFile = storagePath.resolve(FILE_VERSION)
         // TODO: Techically we should have a lock file but oh well. Only use it for single operations tho, so we can have multiple instances of the app
         if (!(Files.exists(versionFile) && Files.isRegularFile(versionFile))) versionFile.createFile()
         versionFile.writeText("1.0")
@@ -74,9 +82,51 @@ class Persistence(
         }.orEmpty() // use orEmpty() otherwise 'null' will be stored as string
         Files.newBufferedWriter(stateFile).use {
             it.appendLine(
-                KEY_CURRENT_DIR + "=" + state.currentDir.normalize().toAbsolutePath().invariantSeparatorsPathString
+                KEY_CURRENT_DIR + "=" + state.currentDir.invariantSeparatorsPathString
             )
             it.appendLine(KEY_SELECTED_FILE + "=" + sSelectedDir)
+        }
+    }
+
+    fun favoritesFile() = storagePath.resolve(FILE_FAVORITES)
+
+    fun ensureFavoritesFile(): Boolean {
+        val f = favoritesFile()
+        if (!f.exists()) {
+            try {
+                f.parent.createDirectories()
+                f.createFile()
+            } catch (e: Exception) {
+                println(
+                    "INFO: ${e::class.simpleName} Failed to create favorites directory " +
+                            "(${f.invariantSeparatorsPathString}): ${e.message}"
+                )
+                return false
+            }
+        }
+        if (!f.isRegularFile()) return false
+        return true
+    }
+
+    /** @return null if the file does not exist */
+    fun loadFavorites(): MutableList<ExplorerFavoriteEntry>? {
+        val file = favoritesFile()
+        if (!file.exists() || !file.isRegularFile())
+            return null
+        val lines = Files.readAllLines(file)
+        val map = LinkedHashMap<String, String?>()
+        convertKeyValueLines(map, lines)
+        val favs = map.filter { it.value != null }
+            .map { ExplorerFavoriteEntry(it.key, Path.of(it.value!!)) }
+        return favs.toMutableList()
+    }
+
+    /** does not validate the file */
+    fun writeFavorites(favs: List<ExplorerFavoriteEntry>) {
+        Files.newBufferedWriter(favoritesFile()).use {
+            for (fav in favs) {
+                it.appendLine(fav.name + "=" + fav.path.invariantSeparatorsPathString)
+            }
         }
     }
 }

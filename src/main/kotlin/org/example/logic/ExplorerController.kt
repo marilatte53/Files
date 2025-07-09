@@ -28,7 +28,6 @@ class ExplorerController {
         try {
             val readState = persistence.read()
             loadPersistentState(readState)
-            state.favoriteList.add(ExplorerFavoriteEntry("Home", Paths.get("c:\\Users\\Mario\\")))
         } catch (e: Exception) {
             println("INFO: Failed to read state file, using default state")
             updateFileList() // This is also called when loadPersistent state is successful
@@ -43,12 +42,14 @@ class ExplorerController {
         if (p.isDirectory()) {
             state.currentDir = p
             updateFileList()
+        } else openFileUnsafe(p)
+    }
+
+    protected fun openFileUnsafe(p: Path) {
+        if (!Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+            Desktop.getDesktop().edit(p.toFile())
         } else {
-            if (!Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
-                Desktop.getDesktop().edit(p.toFile())
-            } else {
-                ProcessBuilder("cmd.exe", "/C", "start", p.absolutePathString()).start()
-            }
+            ProcessBuilder("cmd.exe", "/C", "start", p.absolutePathString()).start()
         }
     }
 
@@ -66,8 +67,8 @@ class ExplorerController {
                 return true
             }
         } catch (e: Exception) {
-            gui.showExceptionDialog(e)
             e.printStackTrace()
+            gui.showExceptionDialog(e)
         }
         return false
     }
@@ -87,6 +88,7 @@ class ExplorerController {
                 try {
                     path.deleteRecursively()
                 } catch (e: IOException) {
+                    e.printStackTrace()
                     gui.showDeletionFailedDialog(path)
                     return
                 }
@@ -149,7 +151,7 @@ class ExplorerController {
                 val fallbackStr = getDefaultDir()
                 println("INFO: Trying fallback dir ('$fallbackStr')")
                 try {
-                    val fallback = Paths.get(fallbackStr)
+                    val fallback = Paths.get(fallbackStr).absolute().normalize()
                     state.currentDir = fallback
                     val tmp = Files.list(fallback)
                     println("INFO: Using fallback dir now")
@@ -163,9 +165,62 @@ class ExplorerController {
         gui.updateFileList(newSelection)
     }
 
+    fun addCurrentDirFavorite() {
+        val curDir = currentDir()
+        val newFav = ExplorerFavoriteEntry(curDir.name, curDir)
+        val favs = favorites()
+        if(favs.find { it.name == newFav.name } != null) {
+            gui.showFavoriteExistsDialog(newFav.name)
+            return
+        }
+        favs.add(newFav)
+        println("DEBUG: Adding favorite $newFav and updating file from cache")
+        try {
+            persistence.ensureFavoritesFile()
+            persistence.writeFavorites(favs)
+            println("DEBUG: Updated favorites")
+        } catch (e: Exception) {
+            e.printStackTrace()
+            println("DEBUG: Failed to update favorites")
+        }
+        // GUI will update itself
+    }
+
+    fun editFavoritesExternally() {
+        // ensure the file exists
+        val file = persistence.favoritesFile()
+        try {
+            persistence.ensureFavoritesFile()
+            openFileUnsafe(file)
+        } catch (e: Exception) {
+            println("INFO: Could not ensure that favorites file exists")
+            e.printStackTrace()
+            gui.showFavoriteFileExceptionDialog(e)
+        }
+    }
+
     fun currentDir() = state.currentDir
     fun fileList() = state.cachedFileList
-    fun favorites() = state.favoriteList
+    fun favorites(): MutableList<ExplorerFavoriteEntry> {
+        // read last changed time
+        persistence.ensureFavoritesFile()
+        val timeModified = persistence.favoritesFile().getLastModifiedTime().toInstant()
+        val timeCached = state.favoriteCacheTime
+        if (timeCached != null && !timeCached.isBefore(timeModified)) {
+            println("DEBUG: Favorite cache is updated, no need to reload")
+            return state.favoriteCache
+        }
+        println("DEBUG: Favorite cache is outdated, reloading now")
+        val newFavs = persistence.loadFavorites()
+        if (newFavs == null) {
+            println("DEBUG: Favorites could not be updated, using outdated cache for now")
+            return state.favoriteCache
+        }
+        println("DEBUG: Favorite cache updated")
+        state.favoriteCache = newFavs
+        state.favoriteCacheTime = timeModified
+        return state.favoriteCache
+    }
 
     /** Set the current state and GUI state according to the PersistentState */
     protected fun loadPersistentState(pState: ExplorerPersistentState) {
@@ -175,7 +230,6 @@ class ExplorerController {
         updateFileList()
         // Adjust selection, in case this doesn't work, we already have a default selection
         gui.trySelectInFileList(pState.selectedPath)
-        // TODO: load favorites
     }
 
     protected fun makePersistentState(): ExplorerPersistentState {
@@ -184,5 +238,6 @@ class ExplorerController {
 
     protected fun runOnShutdown() {
         persistence.write(makePersistentState())
+        // favorites are handled during runtime
     }
 }

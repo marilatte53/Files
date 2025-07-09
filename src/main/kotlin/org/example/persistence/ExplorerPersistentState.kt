@@ -1,15 +1,15 @@
 package org.example.persistence
 
+import org.example.logic.ExplorerFavoriteEntry
 import java.nio.file.Path
+import java.time.LocalDateTime
 
 /**
- * Used to read and write explorer state from and to files. We use a this class to also store selectedFile.
- * This class does not validate any data
+ * Used to read and write explorer state from and to files. We use a this class to also store selectedFile. This class
+ * does not validate any data
  */
 class ExplorerPersistentState(
     val currentDir: Path,
-    /**
-     * Relative path from currentDir
-     */
-    val selectedPath: Path?
+    /** Relative path from currentDir */
+    val selectedPath: Path?,
 )

@@ -24,7 +24,7 @@ class ExplorerGUI(
         val dirIcon = UIManager.getIcon("FileView.directoryIcon")
         val fileIcon = UIManager.getIcon("FileView.fileIcon")
     }
-    
+
     val STARTS_WITH_FILTER =
         Predicate<Path> { it.name.startsWith(filterBar.text, ignoreCase = true) }
     val CONTAINS_FILTER = Predicate<Path> { it.name.contains(filterBar.text, ignoreCase = true) }
@@ -222,6 +222,19 @@ class ExplorerGUI(
             if (i < 9) favItem.accelerator = KeyStroke.getKeyStroke('1' + i++)
             favoritesMenu.add(favItem)
         }
+        favoritesMenu.add(JSeparator())
+        // add current dir A
+        val addCurrItem = JMenuItem()
+        addCurrItem.action = action { controller.addCurrentDirFavorite() }
+        addCurrItem.text = "Add current dir"
+        addCurrItem.accelerator = KeyStroke.getKeyStroke(KeyEvent.VK_A, 0)
+        favoritesMenu.add(addCurrItem)
+        // edit favorites E
+        val editFavsItem = JMenuItem()
+        editFavsItem.action = action { controller.editFavoritesExternally() }
+        editFavsItem.text = "Edit favorites"
+        editFavsItem.accelerator = KeyStroke.getKeyStroke(KeyEvent.VK_E, 0)
+        favoritesMenu.add(editFavsItem)
         favoritesMenu.show(c, 0, 0)
     }
 
@@ -279,9 +292,14 @@ class ExplorerGUI(
         )
     }
 
+    fun showFavoriteFileExceptionDialog(e: Exception) {
+        val msg = "Could not ensure that favorites file exists"
+        JOptionPane.showMessageDialog(null, msg, "Exception occured", JOptionPane.ERROR_MESSAGE)
+    }
+
     fun showExceptionDialog(e: Exception) {
         val msg = "${e::class.simpleName}: ${e.message}"
-        JOptionPane.showMessageDialog(null, msg, "Failed to create file", JOptionPane.ERROR_MESSAGE)
+        JOptionPane.showMessageDialog(null, msg, "Exception occured", JOptionPane.ERROR_MESSAGE)
     }
 
     fun confirmTrashNotSupportedDialog(): Boolean {
@@ -357,5 +375,14 @@ class ExplorerGUI(
     /** Currently this is only used in Main */
     fun focusFileList() {
         fileList.requestFocusInWindow()
+    }
+
+    fun showFavoriteExistsDialog(name: String) {
+        JOptionPane.showMessageDialog(
+            null,
+            "A favorite with the name '$name' already exists",
+            "Favorite exists",
+            JOptionPane.INFORMATION_MESSAGE
+        )
     }
 }
