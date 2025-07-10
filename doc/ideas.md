@@ -12,10 +12,9 @@
 - navigation:
     - telescope dirs: hotkey? do we count files? -> two hotkeys?
     - favorites
-        - CTRL+D
         - hotkey to a certain favorite (CTRL+1 or smth)
     - recents (CTRL+R)
-    - switch drives (CTRL+SHIFT+D?)
+    - switch drives (CTRL+SHIFT+D?) 
 - modification:
     - CTRL+C, CTRL+V, CTRL+X
     - CTRL+Z (CTRL+Y)
@@ -50,6 +49,9 @@
     - up & down
     - address bar, focus with CTRL+L
     - backspace to leave dir
+    - favorites
+        - CTRL+D
+        - persistence
     - enter:
         - enter dir
         - execute/open file
@@ -66,3 +68,4 @@
     - local storage
     - previously opened dir
     - (selected dir)
+    - favorites

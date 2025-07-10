@@ -169,7 +169,7 @@ class ExplorerController {
         val curDir = currentDir()
         val newFav = ExplorerFavoriteEntry(curDir.name, curDir)
         val favs = favorites()
-        if(favs.find { it.name == newFav.name } != null) {
+        if (favs.find { it.name == newFav.name } != null) {
             gui.showFavoriteExistsDialog(newFav.name)
             return
         }
