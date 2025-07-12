@@ -13,8 +13,7 @@
     - telescope dirs: hotkey? do we count files? -> two hotkeys?
     - favorites
         - hotkey to a certain favorite (CTRL+1 or smth)
-    - recents (CTRL+R)
-    - switch drives (CTRL+SHIFT+D?) 
+    - switch drives (CTRL+SHIFT+D?)
 - modification:
     - CTRL+C, CTRL+V, CTRL+X
     - CTRL+Z (CTRL+Y)
@@ -52,9 +51,14 @@
     - favorites
         - CTRL+D
         - persistence
+        - accelerators
     - enter:
         - enter dir
         - execute/open file
+    - recents (CTRL+R)
+        - by access time
+        - by access count
+        - different accelerators for both types
 - filter dir
     - exit tf with ESC, clear with ESC when not in tf
     - order startsWith-filter first, then contains-filter
