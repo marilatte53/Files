@@ -21,8 +21,8 @@ class ExplorerGUI(
     val controller: ExplorerController
 ) {
     companion object {
-        val dirIcon = UIManager.getIcon("FileView.directoryIcon")
-        val fileIcon = UIManager.getIcon("FileView.fileIcon")
+        val dirIcon: Icon? = UIManager.getIcon("FileView.directoryIcon")
+        val fileIcon: Icon? = UIManager.getIcon("FileView.fileIcon")
     }
 
     val STARTS_WITH_FILTER =
@@ -71,12 +71,17 @@ class ExplorerGUI(
             KeyStroke.getKeyStroke(KeyEvent.VK_D, InputEvent.CTRL_DOWN_MASK),
             "openFavorites"
         )
+        rootInputMap.put(
+            KeyStroke.getKeyStroke(KeyEvent.VK_R, InputEvent.CTRL_DOWN_MASK),
+            "openRecents"
+        )
         rootPanel.actionMap.put("focusAddressBar") {
             addressBar.requestFocusInWindow()
             addressBar.selectAll()
         }
         rootPanel.actionMap.put("focusFilterBar") { filterBar.requestFocusInWindow() }
         rootPanel.actionMap.put("openFavorites") { showFavoritesPopup(it) }
+        rootPanel.actionMap.put("openRecents") { showRecentsPopup(it) }
         rootPanel.add(addressBar, BorderLayout.NORTH)
         val uiFileScroller = JScrollPane(fileList)
         uiFileScroller.horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
@@ -236,6 +241,41 @@ class ExplorerGUI(
         editFavsItem.accelerator = KeyStroke.getKeyStroke(KeyEvent.VK_E, 0)
         favoritesMenu.add(editFavsItem)
         favoritesMenu.show(c, 0, 0)
+    }
+
+    private val recentsAC_accelerators = arrayOf('Q', 'W', 'E', 'R', 'T')
+    private fun showRecentsPopup(e: ActionEvent) {
+        val c = e.source
+        if (c !is Component)
+            return
+        val recentsMenu = JPopupMenu("Recent Directories")
+        val recentsByAT = controller.recentDirsAT(5)
+        val recentsByAC = controller.recentDirsAC(5)
+        if(recentsByAT.isEmpty() && recentsByAC.isEmpty())
+            return
+        var i = 0
+        // at
+        for (path in recentsByAT) {
+            val recentEntry = JMenuItem()
+            recentEntry.action = action { controller.tryEnterDir(path) }
+            recentEntry.text = path.name
+            recentEntry.icon = dirIcon
+            recentEntry.accelerator = KeyStroke.getKeyStroke('1' + i++)
+            recentsMenu.add(recentEntry)
+        }
+        i = 0
+        recentsMenu.add(JSeparator())
+        // ac
+        for (path in recentsByAC) {
+            val recentEntry = JMenuItem()
+            recentEntry.action = action { controller.tryEnterDir(path) }
+            recentEntry.text = path.name
+            recentEntry.icon = dirIcon
+            recentEntry.accelerator = KeyStroke.getKeyStroke(recentsAC_accelerators[i++].lowercaseChar())
+            recentsMenu.add(recentEntry)
+        }
+        // reset button?
+        recentsMenu.show(c, 0, 0)
     }
 
     /** The address bar has changed and now we need to update the file list accordingly */

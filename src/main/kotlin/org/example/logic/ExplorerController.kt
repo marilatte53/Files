@@ -30,7 +30,7 @@ class ExplorerController {
             loadPersistentState(readState)
         } catch (e: Exception) {
             println("INFO: Failed to read state file, using default state")
-            updateFileList() // This is also called when loadPersistent state is successful
+            updateFileList() // This is also called when loadPersistentState is successful
         }
         Runtime.getRuntime().addShutdownHook(Thread(::runOnShutdown))
     }
@@ -42,6 +42,7 @@ class ExplorerController {
         if (p.isDirectory()) {
             state.currentDir = p
             updateFileList()
+            state.directoriesAccessed.notify(path)
         } else openFileUnsafe(p)
     }
 
@@ -64,6 +65,7 @@ class ExplorerController {
             if (newDir.exists() && newDir.isDirectory()) {
                 state.currentDir = newDir
                 updateFileList()
+                state.directoriesAccessed.notify(path)
                 return true
             }
         } catch (e: Exception) {
@@ -221,6 +223,9 @@ class ExplorerController {
         state.favoriteCacheTime = timeModified
         return state.favoriteCache
     }
+    
+    fun recentDirsAT(max: Long) = state.directoriesAccessed.sortedByAccessTime(max)
+    fun recentDirsAC(max: Long) = state.directoriesAccessed.sortedByAccessCount(max)
 
     /** Set the current state and GUI state according to the PersistentState */
     protected fun loadPersistentState(pState: ExplorerPersistentState) {
