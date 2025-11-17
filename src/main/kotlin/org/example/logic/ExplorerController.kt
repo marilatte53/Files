@@ -13,7 +13,7 @@ import kotlin.io.path.*
 
 class ExplorerController {
     companion object {
-        fun getDefaultDir(): String = System.getProperty("user.dir")
+        fun getDefaultDir(): String = System.getProperty("user.home")
     }
 
     protected var state: ExplorerState
