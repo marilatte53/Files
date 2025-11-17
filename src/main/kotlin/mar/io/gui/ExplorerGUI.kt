@@ -1,8 +1,8 @@
-package org.example.gui
+package mar.io.gui
 
-import org.example.action
-import org.example.logic.ExplorerController
-import org.example.put
+import mar.io.action
+import mar.io.logic.ExplorerController
+import mar.io.put
 import java.awt.BorderLayout
 import java.awt.Component
 import java.awt.Font

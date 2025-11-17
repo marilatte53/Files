@@ -1,11 +1,10 @@
-package org.example.persistence
+package mar.io.persistence
 
-import org.example.logic.ExplorerController
-import org.example.logic.ExplorerFavoriteEntry
+import mar.io.logic.ExplorerController
+import mar.io.logic.ExplorerFavoriteEntry
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import kotlin.io.path.absolute
 import kotlin.io.path.createDirectories
 import kotlin.io.path.createFile
 import kotlin.io.path.exists

@@ -1,4 +1,4 @@
-package org.example.logic
+package mar.io.logic
 
 import java.nio.file.Path
 import java.time.Instant

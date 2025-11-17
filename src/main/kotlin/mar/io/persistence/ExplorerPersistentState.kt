@@ -1,8 +1,6 @@
-package org.example.persistence
+package mar.io.persistence
 
-import org.example.logic.ExplorerFavoriteEntry
 import java.nio.file.Path
-import java.time.LocalDateTime
 
 /**
  * Used to read and write explorer state from and to files. We use a this class to also store selectedFile. This class

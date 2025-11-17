@@ -1,4 +1,4 @@
-package org.example.gui
+package mar.io.gui
 
 import java.nio.file.Path
 import kotlin.io.path.isDirectory

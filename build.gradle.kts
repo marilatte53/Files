@@ -3,9 +3,9 @@ plugins {
     kotlin("jvm") version "1.9.22"
 }
 
-group = providers.gradleProperty("group")
-version = providers.gradleProperty("version")
-val mainClassFull = "$group.${providers.gradleProperty("relativeMainClass")}"
+group = providers.gradleProperty("group").get()
+version = providers.gradleProperty("version").get()
+val mainClassFull = "$group.${providers.gradleProperty("relativeMainClass").get()}"
 
 repositories {
     mavenCentral()
@@ -32,7 +32,7 @@ application {
 
 tasks {
     jar {
-        archiveBaseName = providers.gradleProperty("archiveName")
+        archiveBaseName = providers.gradleProperty("archiveName").get()
         // add runtime deps to jar
         val runtimeDeps = configurations.runtimeClasspath.get().map(::zipTree)
         from(runtimeDeps)

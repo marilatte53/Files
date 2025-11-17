@@ -1,9 +1,9 @@
-package org.example.logic
+package mar.io.logic
 
-import org.example.gui.ExplorerGUI
-import org.example.isTrashSupported
-import org.example.persistence.ExplorerPersistentState
-import org.example.persistence.Persistence
+import mar.io.gui.ExplorerGUI
+import mar.io.isTrashSupported
+import mar.io.persistence.ExplorerPersistentState
+import mar.io.persistence.Persistence
 import java.awt.Desktop
 import java.io.IOException
 import java.nio.file.Files

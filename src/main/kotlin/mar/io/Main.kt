@@ -1,6 +1,6 @@
-package org.example
+package mar.io
 
-import org.example.logic.ExplorerController
+import mar.io.logic.ExplorerController
 import javax.swing.JFrame
 import javax.swing.WindowConstants
 
