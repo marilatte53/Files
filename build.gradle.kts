@@ -17,7 +17,7 @@ dependencies {
 
 // Deprecated
 application {
-    mainClass = mainClass
+    mainClass = mainClassFull
     tasks.installDist {
         val instDir = System.getenv("INSTALL_DIR").also {
             if (it == null) {
