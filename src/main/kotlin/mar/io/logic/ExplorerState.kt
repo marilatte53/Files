@@ -1,18 +1,17 @@
 package mar.io.logic
 
+import mar.io.persistence.StorageManager
 import java.nio.file.Path
 import java.time.Instant
-import java.util.Comparator
 
 class ExplorerState(
+    val controller: ExplorerController,
     var currentDir: Path,
 ) {
     /** Cached file list. This should always be used in the GUI instead of reading the files from disk directly */
     var cachedFileList: List<Path> = emptyList()
 
-    /** when were the favorites loaded from disk? */
-    var favoriteCacheTime: Instant? = null
-    var favoriteCache = mutableListOf<ExplorerFavoriteEntry>()
+    val favorites = CachedUpdatingResource(controller.storage.favorites, mutableListOf())
 
     val directoriesAccessed = DirectoriesAccessed()
 
@@ -26,7 +25,7 @@ class ExplorerState(
         fun notify(path: Path): Boolean {
             // path should always be in a usable state
 //            val pathUsable = path.absolute().normalize()
-            val ind = list.indexOfFirst { it.path.equals(path) }
+            val ind = list.indexOfFirst { it.path == path }
             if (ind < 0) return list.add(DirectoryAccessEntry(path, 1))
             // move existing entry to the end of the list and add 1 to ac
             val entry = list[ind]
@@ -47,5 +46,68 @@ class ExplorerState(
 
         /** reverse to read the element last added as first */
         fun sortedByAccessTime(max: Long): List<Path> = reversed.stream().limit(max).map { it.path }.toList()
+    }
+
+    inner class CachedUpdatingResource<R>(
+        val resourceFile: StorageManager.ResourceFile<R>,
+        val defaultResource: R
+    ) {
+        val name = resourceFile.name
+        protected var cachedResource = defaultResource
+        protected var lastCacheUpdateTime: Instant? = null
+        protected var lastFailedWriteTime: Instant? = null
+
+        fun readAndGet(): R {
+            debug("Does the cache need an update?")
+            val fileLastModifiedTime = resourceFile.getLastModifiedTime()
+            if (fileLastModifiedTime == null) {
+                debug("Could not retrieve file modification time, returning outdated cache")
+                return cachedResource
+            }
+            val updateTime = lastCacheUpdateTime
+            if (updateTime != null && !updateTime.isBefore(fileLastModifiedTime)) {
+                debug("Cache is up-to-date, no need to read file")
+                // Try to fix previously failed write attempts
+                if (lastFailedWriteTime != null) {
+                    debug("Detected previously failed write attempt. Re-attempting now, since the file is still outdated")
+                    tryWriteCacheToFile()
+                }
+                return cachedResource
+            }
+            debug("Cache is outdated, reloading from file")
+            val newResourceFromFile = resourceFile.readResourceFromFile()
+            if (newResourceFromFile == null) {
+                debug("Resource could not be read from file, returning outdated cache")
+                return cachedResource
+            }
+            this.cachedResource = newResourceFromFile
+            this.lastCacheUpdateTime = fileLastModifiedTime
+            debug("Success! Returning resource from updated cache")
+            return cachedResource
+        }
+
+        fun setAndWrite(newResource: R) {
+            this.cachedResource = newResource
+            tryWriteCacheToFile()
+        }
+
+        protected fun tryWriteCacheToFile() {
+            try {
+                resourceFile.writeResourceToFile(cachedResource)
+                // for safety reasons use the actual timestamp instead of Instant.now
+                val fileNewModifiedTime = resourceFile.getLastModifiedTime()
+                this.lastCacheUpdateTime = fileNewModifiedTime
+                // Indicates, that the write attempt was successful
+                this.lastFailedWriteTime = null
+            } catch (e: Exception) {
+                debug("Failed to write new resource to file: ${e.message}")
+                this.lastCacheUpdateTime = Instant.now()
+                this.lastFailedWriteTime = lastCacheUpdateTime
+            }
+        }
+
+        protected fun debug(message: Any?) {
+            println("DEBUG [cached resource '$name'] $message")
+        }
     }
 }

@@ -5,6 +5,9 @@ by Mario for Mario
 ## Ideas
 
 - store recents
+- status bar?
+- logs
+- highlight filter textfield for visibility
 - multiple views
 - navigation:
     - telescope dirs: hotkey? do we count files? -> two hotkeys?

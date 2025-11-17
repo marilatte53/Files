@@ -2,26 +2,38 @@ package mar.io.persistence
 
 import mar.io.logic.ExplorerController
 import mar.io.logic.ExplorerFavoriteEntry
+import java.io.Writer
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import kotlin.io.path.createDirectories
-import kotlin.io.path.createFile
-import kotlin.io.path.exists
-import kotlin.io.path.invariantSeparatorsPathString
-import kotlin.io.path.isRegularFile
-import kotlin.io.path.writeText
+import java.time.Instant
+import kotlin.io.path.*
 
-class Persistence(
+class StorageManager(
     val storagePath: Path
 ) {
     companion object {
         const val FILE_EXPLORER_STATE = "explorer_state.txt"
         const val FILE_VERSION = "version.txt"
-        const val FILE_FAVORITES = "favorites.txt"
 
         const val KEY_CURRENT_DIR = "currentDir"
         const val KEY_SELECTED_FILE = "selectedFile"
+    }
+
+    val favorites = object : ResourceFile<List<ExplorerFavoriteEntry>>("favorites", "favorites.txt") {
+        override fun convertToResource(lines: List<String>): List<ExplorerFavoriteEntry>? {
+            val map = LinkedHashMap<String, String?>()
+            convertKeyValueLines(map, lines)
+            val favs = map.filter { it.value != null }
+                .map { ExplorerFavoriteEntry(it.key, Path.of(it.value!!)) }
+            return favs.toMutableList()
+        }
+
+        override fun writeResource(writer: Writer, favorites: List<ExplorerFavoriteEntry>): Boolean {
+            for (favorite in favorites)
+                writer.appendLine(favorite.name + "=" + favorite.path.invariantSeparatorsPathString)
+            return true
+        }
     }
 
     val stateFile = storagePath.resolve(FILE_EXPLORER_STATE)
@@ -41,7 +53,7 @@ class Persistence(
         return state
     }
 
-    fun convertKeyValueLines(buffer: MutableMap<String, String?>, lines: List<String>) {
+    protected fun convertKeyValueLines(buffer: MutableMap<String, String?>, lines: List<String>) {
         var i = 0
         println("DEBUG: Converting ${lines.size} key-value lines")
         for (lineStr in lines) {
@@ -68,6 +80,23 @@ class Persistence(
         }
     }
 
+    protected fun ensureRegularFileExists(path: Path): Boolean {
+        if (!path.exists()) {
+            try {
+                path.parent.createDirectories()
+                path.createFile()
+            } catch (e: Exception) {
+                println(
+                    "INFO: ${e::class.simpleName} Failed to create parent directories for file " +
+                            "'(${path.invariantSeparatorsPathString})': ${e.message}"
+                )
+                return false
+            }
+        }
+        if (!path.isRegularFile()) return false
+        return true
+    }
+
     // TODO: error handling, logging
     fun write(state: ExplorerPersistentState) {
         Files.createDirectories(storagePath)
@@ -87,45 +116,33 @@ class Persistence(
         }
     }
 
-    fun favoritesFile() = storagePath.resolve(FILE_FAVORITES)
+    inner abstract class ResourceFile<R>(
+        val name: String,
+        val relativePathString: String
+    ) {
+        val path = storagePath.resolve(relativePathString)
 
-    fun ensureFavoritesFile(): Boolean {
-        val f = favoritesFile()
-        if (!f.exists()) {
-            try {
-                f.parent.createDirectories()
-                f.createFile()
-            } catch (e: Exception) {
-                println(
-                    "INFO: ${e::class.simpleName} Failed to create favorites directory " +
-                            "(${f.invariantSeparatorsPathString}): ${e.message}"
-                )
+        abstract protected fun writeResource(writer: Writer, resource: R): Boolean
+        abstract protected fun convertToResource(lines: List<String>): R?
+
+        fun readResourceFromFile(): R? {
+            if (!path.exists() || !path.isRegularFile())
+                return null
+            return convertToResource(Files.readAllLines(path))
+        }
+
+        fun writeResourceToFile(resource: R): Boolean {
+            if (!ensureExistence())
                 return false
-            }
+            return Files.newBufferedWriter(path).use { writeResource(it, resource) }
         }
-        if (!f.isRegularFile()) return false
-        return true
-    }
 
-    /** @return null if the file does not exist */
-    fun loadFavorites(): MutableList<ExplorerFavoriteEntry>? {
-        val file = favoritesFile()
-        if (!file.exists() || !file.isRegularFile())
-            return null
-        val lines = Files.readAllLines(file)
-        val map = LinkedHashMap<String, String?>()
-        convertKeyValueLines(map, lines)
-        val favs = map.filter { it.value != null }
-            .map { ExplorerFavoriteEntry(it.key, Path.of(it.value!!)) }
-        return favs.toMutableList()
-    }
-
-    /** does not validate the file */
-    fun writeFavorites(favs: List<ExplorerFavoriteEntry>) {
-        Files.newBufferedWriter(favoritesFile()).use {
-            for (fav in favs) {
-                it.appendLine(fav.name + "=" + fav.path.invariantSeparatorsPathString)
-            }
+        fun getLastModifiedTime(): Instant? {
+            if (!path.isRegularFile())
+                return null
+            return path.getLastModifiedTime().toInstant()
         }
+
+        fun ensureExistence(): Boolean = ensureRegularFileExists(path)
     }
 }
