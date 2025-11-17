@@ -36,7 +36,7 @@ class StorageManager(
         }
     }
 
-    val stateFile = storagePath.resolve(FILE_EXPLORER_STATE)
+    val stateFile: Path = storagePath.resolve(FILE_EXPLORER_STATE)
 
     fun read(): ExplorerPersistentState {
         // TODO: Maybe check the version file???
@@ -46,9 +46,9 @@ class StorageManager(
             println("DEBUG: State file found, proceeding to read")
             convertKeyValueLines(stateMap, Files.readAllLines(stateFile))
         } else println("INFO: State file does not exist or is not a regular file")
-        val currentDir = Paths.get(stateMap.get(KEY_CURRENT_DIR) ?: ExplorerController.getDefaultDir())
+        val currentDir = Paths.get(stateMap[KEY_CURRENT_DIR] ?: ExplorerController.getDefaultDir())
         // In case this is not present, it will get fixed at the initial update call in Controller
-        val selectedDir = stateMap.get(KEY_SELECTED_FILE)?.let { currentDir.resolve(it) }
+        val selectedDir = stateMap[KEY_SELECTED_FILE]?.let { currentDir.resolve(it) }
         val state = ExplorerPersistentState(currentDir, selectedDir)
         return state
     }
@@ -112,18 +112,18 @@ class StorageManager(
             it.appendLine(
                 KEY_CURRENT_DIR + "=" + state.currentDir.invariantSeparatorsPathString
             )
-            it.appendLine(KEY_SELECTED_FILE + "=" + sSelectedDir)
+            it.appendLine("$KEY_SELECTED_FILE=$sSelectedDir")
         }
     }
 
-    inner abstract class ResourceFile<R>(
+    abstract inner class ResourceFile<R>(
         val name: String,
         val relativePathString: String
     ) {
-        val path = storagePath.resolve(relativePathString)
+        val path: Path = storagePath.resolve(relativePathString)
 
-        abstract protected fun writeResource(writer: Writer, resource: R): Boolean
-        abstract protected fun convertToResource(lines: List<String>): R?
+        protected abstract fun writeResource(writer: Writer, resource: R): Boolean
+        protected abstract fun convertToResource(lines: List<String>): R?
 
         fun readResourceFromFile(): R? {
             if (!path.exists() || !path.isRegularFile())

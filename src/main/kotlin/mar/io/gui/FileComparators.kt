@@ -22,12 +22,10 @@ class FileComparators {
             }
         }
 
-        val UNDERSCORE_FIRST = object : Comparator<Path> {
-            override fun compare(o1: Path?, o2: Path?): Int {
-                requireNotNull(o1)
-                requireNotNull(o2)
-                return if (o1.startsWith("_") && !o2.startsWith("_")) -1 else 0
-            }
+        val UNDERSCORE_FIRST = Comparator<Path> { o1, o2 ->
+            requireNotNull(o1)
+            requireNotNull(o2)
+            if (o1.startsWith("_") && !o2.startsWith("_")) -1 else 0
         }
     }
 }
