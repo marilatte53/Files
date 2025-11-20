@@ -43,11 +43,15 @@ class ExplorerGUI(
     val filterBar = JTextField()
 
     /** a little hack */
-    protected var filter: String?
+    var filter: String?
         set(value) {
             this.filterBar.text = value
         }
         get() = this.filterBar.text
+
+    fun clearFilter() {
+        this.filterBar.text = ""
+    }
 
     /** Stores the previous filter text in the time between a filter update and a file list update */
     var previousFilter: String? = null
@@ -95,13 +99,13 @@ class ExplorerGUI(
         fileList.model = fileListModel
         fileList.selectedIndex = 0
         // Enter directory or open file with default application
-        fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "openPath")
-        fileList.actionMap.put("openPath") { controller.openFileOrEnterDir(selectedPath()) }
+        fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "enterOrExecute")
+        fileList.actionMap.put("enterOrExecute") { selectedPath()?.let(controller::enterOrExecute) }
         fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_BACK_SPACE, 0), "leaveDir")
         fileList.actionMap.put("leaveDir") { controller.tryLeaveCurrentDir() }
         fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "dropFilters")
         fileList.actionMap.put("dropFilters") {
-            this.filter = null
+            clearFilter()
             controller.updateFileList()
         }
         fileList.cellRenderer =
@@ -251,7 +255,7 @@ class ExplorerGUI(
         val recentsMenu = JPopupMenu("Recent Directories")
         val recentsByAT = controller.recentDirsAT(5)
         val recentsByAC = controller.recentDirsAC(5)
-        if(recentsByAT.isEmpty() && recentsByAC.isEmpty())
+        if (recentsByAT.isEmpty() && recentsByAC.isEmpty())
             return
         var i = 0
         // at
@@ -280,7 +284,7 @@ class ExplorerGUI(
 
     /** The address bar has changed and now we need to update the file list accordingly */
     protected fun confirmAddressBar() {
-        if (!controller.tryEnterDir(Path.of(addressBar.text))) controller.updateFileList()
+        controller.tryEnterDir(Path.of(addressBar.text))
         fileList.requestFocusInWindow()
     }
 
@@ -337,8 +341,8 @@ class ExplorerGUI(
         JOptionPane.showMessageDialog(null, msg, "Exception occured", JOptionPane.ERROR_MESSAGE)
     }
 
-    fun showExceptionDialog(e: Exception) {
-        val msg = "${e::class.simpleName}: ${e.message}"
+    fun showExceptionDialog(t: Throwable) {
+        val msg = "${t::class.simpleName}: ${t.message}"
         JOptionPane.showMessageDialog(null, msg, "Exception occured", JOptionPane.ERROR_MESSAGE)
     }
 
@@ -387,8 +391,7 @@ class ExplorerGUI(
             // in case of file system changes, we need to validate the old filter again
             files = makeFileListUsable(controller.fileList())
             if (!filter.isNullOrEmpty() && files.isEmpty()) {// old filter is invalid too
-                // -> clear the filter
-                this.filter = null
+                clearFilter()
                 // and of course get the files again
                 files = makeFileListUsable(controller.fileList())
             }

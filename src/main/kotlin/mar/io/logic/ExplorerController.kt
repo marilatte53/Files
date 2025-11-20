@@ -35,15 +35,12 @@ class ExplorerController {
         Runtime.getRuntime().addShutdownHook(Thread(::runOnShutdown))
     }
 
-    fun openFileOrEnterDir(path: Path?) {
-        val p = path?.absolute() ?: return
+    fun enterOrExecute(path: Path) {
+        val p = path.absolute().normalize()
         if (!p.exists())
             return
-        if (p.isDirectory()) {
-            state.currentDir = p
-            updateFileList()
-            state.directoriesAccessed.notify(path)
-        } else openFileUnsafe(p)
+        if (p.isDirectory()) tryEnterDir(p)
+        else openFileUnsafe(p)
     }
 
     protected fun openFileUnsafe(p: Path) {
@@ -59,21 +56,27 @@ class ExplorerController {
      *
      * @return true if we could enter, false otherwise
      */
-    fun tryEnterDir(path: Path): Boolean {
-        try {
+    fun tryEnterDir(path: Path): Boolean =
+        runCatching {
             val newDir = path.absolute().normalize()
-            if (newDir.exists() && newDir.isDirectory()) {
+            if (!newDir.exists())
+                return@runCatching false
+            if (currentDir().isSameFileAs(newDir))
+                return@runCatching true
+            if (newDir.isDirectory()) {
                 state.currentDir = newDir
-                updateFileList()
                 state.directoriesAccessed.notify(path)
-                return true
+                return@runCatching true
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            gui.showExceptionDialog(e)
+            return@runCatching false
+        }.onSuccess {
+            gui.clearFilter()
+            updateFileList()
+        }.getOrElse {
+            it.printStackTrace()
+            gui.showExceptionDialog(it)
+            return@getOrElse false
         }
-        return false
-    }
 
     @OptIn(ExperimentalPathApi::class)
     fun tryDeletePath(path: Path? = null, trySelect: Path? = null) {
