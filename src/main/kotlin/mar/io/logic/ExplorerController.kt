@@ -65,7 +65,7 @@ class ExplorerController {
                 return@runCatching true
             if (newDir.isDirectory()) {
                 state.currentDir = newDir
-                state.directoriesAccessed.notify(path)
+                state.directoriesAccessed.readAndWrite { it.notify(path) }
                 return@runCatching true
             }
             return@runCatching false
@@ -114,7 +114,8 @@ class ExplorerController {
     /**
      * Create new dir
      *
-     * @return true if the directory was created, false if the directory already exists
+     * @return true if the directory was created, false if the directory
+     *    already exists
      * @throws
      */
     fun tryCreateDir(dirName: String) {
@@ -144,8 +145,8 @@ class ExplorerController {
     /**
      * Reload the file list from disk and adjust the GUI accordingly
      *
-     * @param newSelection default is current dir. So if we just want to refresh the file list, we don't need to pass
-     *    anything
+     * @param newSelection default is current dir. So if we just want to
+     *    refresh the file list, we don't need to pass anything
      */
     fun updateFileList(newSelection: Path? = null) {
         val files =
@@ -204,8 +205,8 @@ class ExplorerController {
     fun fileList() = state.cachedFileList
     fun favorites(): List<ExplorerFavoriteEntry> = state.favorites.readAndGet()
 
-    fun recentDirsAT(max: Long) = state.directoriesAccessed.sortedByAccessTime(max)
-    fun recentDirsAC(max: Long) = state.directoriesAccessed.sortedByAccessCount(max)
+    fun recentDirsAT(max: Long) = state.directoriesAccessed.readAndGet().sortedByAccessTime(max)
+    fun recentDirsAC(max: Long) = state.directoriesAccessed.readAndGet().sortedByAccessCount(max)
 
     /** Set the current state and GUI state according to the PersistentState */
     protected fun loadPersistentState(pState: ExplorerPersistentState) {

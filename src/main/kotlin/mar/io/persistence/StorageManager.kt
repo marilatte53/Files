@@ -2,6 +2,10 @@ package mar.io.persistence
 
 import mar.io.logic.ExplorerController
 import mar.io.logic.ExplorerFavoriteEntry
+import mar.io.logic.ExplorerState
+import mar.io.persistence.StorageManager.Companion.FILE_EXPLORER_STATE
+import mar.io.persistence.StorageManager.Companion.KEY_CURRENT_DIR
+import mar.io.persistence.StorageManager.Companion.KEY_SELECTED_FILE
 import java.io.Writer
 import java.nio.file.Files
 import java.nio.file.Path
@@ -21,7 +25,10 @@ class StorageManager(
     }
 
     val favorites = object : ResourceFile<List<ExplorerFavoriteEntry>>("favorites", "favorites.txt") {
-        override fun convertToResource(lines: List<String>): List<ExplorerFavoriteEntry>? {
+        override fun getUpdatedResource(
+            lines: List<String>,
+            resource: List<ExplorerFavoriteEntry>
+        ): List<ExplorerFavoriteEntry> {
             val map = LinkedHashMap<String, String?>()
             convertKeyValueLines(map, lines)
             val favs = map.filter { it.value != null }
@@ -29,12 +36,39 @@ class StorageManager(
             return favs.toMutableList()
         }
 
-        override fun writeResource(writer: Writer, favorites: List<ExplorerFavoriteEntry>): Boolean {
-            for (favorite in favorites)
+        override fun writeResource(writer: Writer, resource: List<ExplorerFavoriteEntry>): Boolean {
+            for (favorite in resource)
                 writer.appendLine(favorite.name + "=" + favorite.path.invariantSeparatorsPathString)
             return true
         }
     }
+
+    val directoriesAccessed =
+        object : ResourceFile<ExplorerState.DirectoriesAccessed>(
+            "directoriesAccessed",
+            "directories_accessed.txt"
+        ) {
+            override fun writeResource(
+                writer: Writer,
+                resource: ExplorerState.DirectoriesAccessed
+            ): Boolean {
+                val dirsAT = resource.sortedByAccessTime(100)
+                for (dirPath in dirsAT) {
+                    // should already be in the proper format
+                    writer.appendLine(dirPath.invariantSeparatorsPathString)
+                }
+                return true
+            }
+
+            override fun getUpdatedResource(
+                lines: List<String>,
+                resource: ExplorerState.DirectoriesAccessed
+            ): ExplorerState.DirectoriesAccessed? {
+                resource.clearEntries()
+                resource.setInitialEntries(lines.map { Paths.get(it) })
+                return resource
+            }
+        }
 
     val stateFile: Path = storagePath.resolve(FILE_EXPLORER_STATE)
 
@@ -115,7 +149,7 @@ class StorageManager(
             it.appendLine("$KEY_SELECTED_FILE=$sSelectedDir")
         }
     }
-
+    
     abstract inner class ResourceFile<R>(
         val name: String,
         val relativePathString: String
@@ -123,13 +157,7 @@ class StorageManager(
         val path: Path = storagePath.resolve(relativePathString)
 
         protected abstract fun writeResource(writer: Writer, resource: R): Boolean
-        protected abstract fun convertToResource(lines: List<String>): R?
-
-        fun readResourceFromFile(): R? {
-            if (!path.exists() || !path.isRegularFile())
-                return null
-            return convertToResource(Files.readAllLines(path))
-        }
+        protected abstract fun getUpdatedResource(lines: List<String>, resource: R): R?
 
         fun writeResourceToFile(resource: R): Boolean {
             if (!ensureExistence())
@@ -141,6 +169,12 @@ class StorageManager(
             if (!path.isRegularFile())
                 return null
             return path.getLastModifiedTime().toInstant()
+        }
+
+        fun readResourceFromFile(resource: R): R? {
+            if (!path.exists() || !path.isRegularFile())
+                return null
+            return getUpdatedResource(Files.readAllLines(path), resource)
         }
 
         fun ensureExistence(): Boolean = ensureRegularFileExists(path)

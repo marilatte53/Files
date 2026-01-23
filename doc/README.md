@@ -4,18 +4,17 @@ by Mario for Mario
 
 ## Ideas
 
-- store recents
-- status bar?
-- logs
-- highlight filter textfield for visibility
 - multiple views
-- navigation:
-    - telescope dirs: hotkey? do we count files? -> two hotkeys?
-    - switch drives (CTRL+SHIFT+D?)
 - modification:
     - CTRL+C, CTRL+V, CTRL+X
     - CTRL+Z (CTRL+Y)
     - F2 to rename file, move up & down while renaming
+- status bar?
+- logs
+- highlight filter textfield for visibility
+- navigation:
+    - telescope dirs: hotkey? do we count files? -> two hotkeys?
+    - switch drives (CTRL+SHIFT+D?)
 - selection:
     - when pressing space, introduce a second selection layer -> only these count ???
     - cache selections when leaving dirs??
@@ -54,3 +53,4 @@ by Mario for Mario
     - previously opened dir
     - previously selected dir
     - favorites
+    - recejnts

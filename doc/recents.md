@@ -17,3 +17,7 @@
 - Store n directories with the highest access count in a session
 - Store additional m directories that were accessed recently
 - On session start: load previous entries only as recents
+
+**Implementation**
+All sessions use the same dynamically updating file -> they share recents.
+For now only implement "by access time"

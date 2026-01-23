@@ -8,14 +8,20 @@ class ExplorerState(
     val controller: ExplorerController,
     var currentDir: Path,
 ) {
-    /** Cached file list. This should always be used in the GUI instead of reading the files from disk directly */
+    /**
+     * Cached file list. This should always be used in the GUI instead of
+     * reading the files from disk directly
+     */
     var cachedFileList: List<Path> = emptyList()
 
     val favorites = CachedUpdatingResource(controller.storage.favorites, mutableListOf())
 
-    val directoriesAccessed = DirectoriesAccessed()
+    val directoriesAccessed = CachedUpdatingResource(controller.storage.directoriesAccessed, DirectoriesAccessed())
 
-    /** stores dirs that were accessed by the user at any point during this session */
+    /**
+     * stores dirs that were accessed by the user at any point during this
+     * session
+     */
     inner class DirectoriesAccessed {
         // This won't scale well but a tactical restart will fix it
         protected var list = mutableListOf<DirectoryAccessEntry>()
@@ -36,11 +42,15 @@ class ExplorerState(
         }
 
         /** should only be called when the list is still empty */
-        fun setInitialEntries(list: List<Path>) {
+        fun setInitialEntries(list: List<Path>) { //Ratte DnBummZua
             this.list.addAll(list.map { DirectoryAccessEntry(it, 1) })
         }
 
-        // Reversed list is ordered by access time. This maintains AT order when paths have the same AC
+        fun clearEntries() {
+            this.list.clear()
+        }
+
+        // Reversed list is ordered by access time. By using it we maintain that order when paths have the same AC
         fun sortedByAccessCount(max: Long): List<Path> =
             reversed.stream().sorted(Comparator.reverseOrder()).limit(max).map { it.path }.toList()
 
@@ -50,12 +60,16 @@ class ExplorerState(
 
     inner class CachedUpdatingResource<R>(
         val resourceFile: StorageManager.ResourceFile<R>,
-        val defaultResource: R
+        val initRsrc: R
     ) {
         val name = resourceFile.name
-        protected var cachedResource = defaultResource
+        protected var cachedResource = initRsrc
         protected var lastCacheUpdateTime: Instant? = null
         protected var lastFailedWriteTime: Instant? = null
+
+        fun readAndWrite(updateFunction: (rsrc: R) -> Unit) {
+            readAndGet().also { updateFunction(it) }.let { setAndWrite(it) }
+        }
 
         fun readAndGet(): R {
             debug("Does the cache need an update?")
@@ -75,7 +89,7 @@ class ExplorerState(
                 return cachedResource
             }
             debug("Cache is outdated, reloading from file")
-            val newResourceFromFile = resourceFile.readResourceFromFile()
+            val newResourceFromFile = resourceFile.readResourceFromFile(cachedResource)
             if (newResourceFromFile == null) {
                 debug("Resource could not be read from file, returning outdated cache")
                 return cachedResource
