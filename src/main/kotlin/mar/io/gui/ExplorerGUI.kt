@@ -2,12 +2,12 @@ package mar.io.gui
 
 import mar.io.action
 import mar.io.logic.ExplorerController
+import mar.io.logic.FileListPasteOperation
 import mar.io.put
-import java.awt.BorderLayout
-import java.awt.Component
-import java.awt.Font
-import java.awt.Robot
+import java.awt.*
+import java.awt.datatransfer.DataFlavor
 import java.awt.event.*
+import java.io.File
 import java.nio.file.Path
 import java.util.function.Predicate
 import java.util.stream.Collectors
@@ -156,9 +156,15 @@ class ExplorerGUI(
             ), "createFile"
         )
         fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0), "deletePath")
+        fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_X, InputEvent.CTRL_DOWN_MASK), "cutSelection")
+        fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_C, InputEvent.CTRL_DOWN_MASK), "copySelection")
+        fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_V, InputEvent.CTRL_DOWN_MASK), "paste")
         fileList.actionMap.put("createDir") { userCreateDir() }
         fileList.actionMap.put("createFile") { userCreateFile() }
         fileList.actionMap.put("deletePath") { userDeletePath() }
+        fileList.actionMap.put("cutSelection") { userCutOrCopy(true) }
+        fileList.actionMap.put("copySelection") { userCutOrCopy(false) }
+        fileList.actionMap.put("paste") { userPaste() }
         val ctxMenu = JPopupMenu("test")
         val iCreateDir = JMenuItem("New Directory")
         iCreateDir.addActionListener { userCreateDir() }
@@ -313,18 +319,60 @@ class ExplorerGUI(
     }
 
     protected fun userDeletePath() {
-        // try to select the entry after the deleted one. If there is none, select the one before
-        // In the future it will be possible to delete multiple selected files. So we already implement this here:
+        // TODO: only skip confirmation when shift is pressed or smth
         val fileList = makeFileListUsable(controller.fileList()).toMutableList()
         val selectedPath = selectedPath() ?: return
-        var selectionIndex: Int = fileList.indexOf(selectedPath)
-        if (selectionIndex < 0 || !fileList.remove(selectedPath)) { // should never happen since the selection has to be in the list
+        val deletedIndex: Int = fileList.indexOf(selectedPath)
+        if (deletedIndex < 0 || !fileList.remove(selectedPath)) {
             println("FATAL: Trying to delete '${selectedPath.invariantSeparatorsPathString}', but path is not in file list!")
+            // since the file list has deynced, we need to fix the selection
+            trySelectInFileList(null)
             return
         }
-        if (selectionIndex >= fileList.size) // check if the new index is valid
-            selectionIndex = fileList.size - 1
-        controller.tryDeletePath(selectedPath, fileList[selectionIndex])
+        controller.tryDeleteFileEntry(selectedPath)
+        // fix the selection in case of desync or deleting the last file in the list
+        if (fileList.isEmpty())
+            trySelectInFileList(null)
+        else if (deletedIndex == 0)
+            trySelectInFileList(fileList[0])
+        else if (deletedIndex >= fileList.size)
+            trySelectInFileList(fileList[fileList.size - 1])
+        else
+            trySelectInFileList(fileList[deletedIndex - 1])
+    }
+
+    protected fun userCutOrCopy(cut: Boolean) {
+        if (fileList.selectedValuesList.isNullOrEmpty())
+            return
+        Toolkit.getDefaultToolkit().systemClipboard.setContents(
+            CutOrCopyFileListTransferable(fileList.selectedValuesList, cut),
+            null
+        )
+    }
+
+    protected fun userPaste() {
+        val cb = Toolkit.getDefaultToolkit().systemClipboard
+        val flavors = cb.availableDataFlavors
+        val op: FileListPasteOperation = runCatching {
+            if (flavors.contains(CutOrCopyFileListTransferable.CUT_FILE_LIST_FLAVOR)) {
+                @Suppress("UNCHECKED_CAST")
+                val pathList: List<Path> = cb.getData(CutOrCopyFileListTransferable.CUT_FILE_LIST_FLAVOR) as List<Path>
+                return@runCatching controller.startFilePasteOperation(pathList, true)
+            } else if (flavors.contains(DataFlavor.javaFileListFlavor)) {
+                @Suppress("UNCHECKED_CAST")
+                val pathList: List<Path> = (cb.getData(DataFlavor.javaFileListFlavor) as List<File>).map { it.toPath() }
+                return@runCatching controller.startFilePasteOperation(pathList, false)
+            }
+            return
+        }.onFailure {
+            // TODO: error handling
+            return
+        }.getOrThrow()
+        controller.updateFileList()
+        // TODO: handle errors and collisions
+        // TODO: select the pasted files in the list after
+//        if (!targets.values.isEmpty())
+//            updateFileList(targets.values.find { true })
     }
 
     fun showDeletionFailedDialog(path: Path) {
@@ -380,7 +428,7 @@ class ExplorerGUI(
     /**
      * @param trySelect try to select this value after updating the list. If null, try to preserve the previous
      *    selection
-     * @param clearSelection when this is true, clear the selection and ignore newSelection
+     * @param clearSelection when this is true, clear the selection and ignore [trySelect]
      */
     fun updateFileList(trySelect: Path? = null, clearSelection: Boolean = false) {
         setAddress(controller.currentDir())
@@ -407,8 +455,8 @@ class ExplorerGUI(
         trySelectInFileList(newSel)
     }
 
+    /** When path is null, the first file will be selected */
     fun trySelectInFileList(path: Path?): Boolean {
-        // Don't bother checking for null, setSelectedValue will handle it
         fileList.setSelectedValue(path, true)
         if (fileList.selectedValue != null) return true
         fileList.selectedIndex = 0

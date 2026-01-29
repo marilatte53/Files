@@ -5,9 +5,8 @@ import javax.swing.JFrame
 import javax.swing.WindowConstants
 
 fun main() {
-    val contr = ExplorerController()
-    
     val frame = JFrame()
+    val contr = ExplorerController(frame)
     frame.setSize(900, 600)
     frame.setLocationRelativeTo(null)
     frame.defaultCloseOperation = WindowConstants.EXIT_ON_CLOSE

@@ -9,11 +9,15 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import javax.swing.JFrame
 import kotlin.io.path.*
 
-class ExplorerController {
+class ExplorerController(
+    val frame: JFrame
+) {
     companion object {
-        fun getDefaultDir(): String = System.getProperty("user.home")
+        fun getFallbackPathStr(): String = System.getProperty("user.home")
+        fun getFallbackPath(): Path = Paths.get(getFallbackPathStr()).toRealPath()
     }
 
     protected var state: ExplorerState
@@ -24,7 +28,7 @@ class ExplorerController {
     init {
         this.gui = ExplorerGUI(this)
         // TODO: why is this not in catch clause
-        this.state = ExplorerState(this, Paths.get(getDefaultDir()))
+        this.state = ExplorerState(this, getFallbackPath())
         try {
             val readState = storage.read()
             loadPersistentState(readState)
@@ -58,7 +62,7 @@ class ExplorerController {
      */
     fun tryEnterDir(path: Path): Boolean =
         runCatching {
-            val newDir = path.absolute().normalize()
+            val newDir = if (path.toString().isBlank()) getFallbackPath() else path.toRealPath()
             if (!newDir.exists())
                 return@runCatching false
             if (currentDir().isSameFileAs(newDir))
@@ -79,7 +83,7 @@ class ExplorerController {
         }
 
     @OptIn(ExperimentalPathApi::class)
-    fun tryDeletePath(path: Path? = null, trySelect: Path? = null) {
+    fun tryDeleteFileEntry(path: Path? = null) {
         if (path == null) return
         try {
             if (isTrashSupported()) {
@@ -98,7 +102,7 @@ class ExplorerController {
                     return
                 }
             }
-            updateFileList(trySelect)
+            updateFileList()
         } catch (e: Exception) {
             gui.showExceptionDialog(e)
         }
@@ -114,8 +118,7 @@ class ExplorerController {
     /**
      * Create new dir
      *
-     * @return true if the directory was created, false if the directory
-     *    already exists
+     * @return true if the directory was created, false if the directory already exists
      * @throws
      */
     fun tryCreateDir(dirName: String) {
@@ -142,26 +145,19 @@ class ExplorerController {
         }
     }
 
-    /**
-     * Reload the file list from disk and adjust the GUI accordingly
-     *
-     * @param newSelection default is current dir. So if we just want to
-     *    refresh the file list, we don't need to pass anything
-     */
+    /** Reload the file list from disk and adjust the GUI accordingly */
     fun updateFileList(newSelection: Path? = null) {
         val files =
             try {
                 Files.list(state.currentDir)
             } catch (e: Exception) {
                 println("INFO: ${e::class.simpleName} Cannot list files in currentDir ('${state.currentDir}'): ${e.message}")
-                val fallbackStr = getDefaultDir()
-                println("INFO: Trying fallback dir ('$fallbackStr')")
+                val fallbackPath = getFallbackPath()
+                println("INFO: Trying fallback dir ('${fallbackPath.pathString}')")
                 try {
-                    val fallback = Paths.get(fallbackStr).absolute().normalize()
-                    state.currentDir = fallback
-                    val tmp = Files.list(fallback)
+                    state.currentDir = fallbackPath
                     println("INFO: Using fallback dir now")
-                    tmp
+                    Files.list(fallbackPath)
                 } catch (e: Exception) {
                     println("FATAL: Fallback failed. Check the fallback directory.")
                     return
@@ -199,6 +195,29 @@ class ExplorerController {
             e.printStackTrace()
             gui.showFavoriteFileExceptionDialog(e)
         }
+    }
+
+    /**
+     * Starts a [FileListPasteOperation]. When executed, the operation will attempt to copy each file or directory in
+     * [srcFileList] into the current directory of the controller.
+     *
+     * @param srcFileList
+     * @param deleteSourceFiles If true, will try to delete the source files after copying them to their new location.
+     * This is used when the user performs a paste after a cut operation
+     * @return
+     */
+    @OptIn(ExperimentalPathApi::class)
+    fun startFilePasteOperation(srcFileList: List<Path>, deleteSourceFiles: Boolean): FileListPasteOperation =
+        FileListPasteOperation(
+            this,
+            srcFileList,
+            currentDir(),
+            deleteSourceFiles,
+            FileListPasteOperation.PasteCollisionMode.RESOLVE_LATER
+        )
+
+    fun removeFileEntries(pathList: List<Path>) {
+//        pathList.forEach { Desktop.getDesktop(). }
     }
 
     fun currentDir() = state.currentDir

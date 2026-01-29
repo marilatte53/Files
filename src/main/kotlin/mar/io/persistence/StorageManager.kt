@@ -80,7 +80,7 @@ class StorageManager(
             println("DEBUG: State file found, proceeding to read")
             convertKeyValueLines(stateMap, Files.readAllLines(stateFile))
         } else println("INFO: State file does not exist or is not a regular file")
-        val currentDir = Paths.get(stateMap[KEY_CURRENT_DIR] ?: ExplorerController.getDefaultDir())
+        val currentDir = stateMap[KEY_CURRENT_DIR]?.let(Paths::get) ?: ExplorerController.getFallbackPath()
         // In case this is not present, it will get fixed at the initial update call in Controller
         val selectedDir = stateMap[KEY_SELECTED_FILE]?.let { currentDir.resolve(it) }
         val state = ExplorerPersistentState(currentDir, selectedDir)
