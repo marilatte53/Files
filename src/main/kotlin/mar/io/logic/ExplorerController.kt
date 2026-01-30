@@ -10,7 +10,17 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import javax.swing.JFrame
-import kotlin.io.path.*
+import kotlin.io.path.ExperimentalPathApi
+import kotlin.io.path.absolute
+import kotlin.io.path.absolutePathString
+import kotlin.io.path.createDirectory
+import kotlin.io.path.createFile
+import kotlin.io.path.deleteRecursively
+import kotlin.io.path.exists
+import kotlin.io.path.isDirectory
+import kotlin.io.path.isSameFileAs
+import kotlin.io.path.name
+import kotlin.io.path.pathString
 
 class ExplorerController(
     val frame: JFrame
@@ -198,23 +208,26 @@ class ExplorerController(
     }
 
     /**
-     * Starts a [FileListPasteOperation]. When executed, the operation will attempt to copy each file or directory in
-     * [srcFileList] into the current directory of the controller.
+     * Starts a [FileListPasteOperation] as a background operation at first. If it takes to long, it will block the main
+     * frame and show a progress bar. The user can then minimize it to continue in the background again. If there are
+     * any errors, the blocking frame will pop up again and prompt the user on how to proceed.
+     * 
+     * TODO: ui for minimized ops. also log? "copioed # files from x to y"
      *
-     * @param srcFileList
+     * @param srcFileList The files that should be pasted
      * @param deleteSourceFiles If true, will try to delete the source files after copying them to their new location.
-     * This is used when the user performs a paste after a cut operation
-     * @return
+     * This is used equivalent to a cut operation.
      */
     @OptIn(ExperimentalPathApi::class)
-    fun startFilePasteOperation(srcFileList: List<Path>, deleteSourceFiles: Boolean): FileListPasteOperation =
-        FileListPasteOperation(
+    fun startFilePasteOperation(srcFileList: List<Path>, deleteSourceFiles: Boolean) {
+        val op = FileListPasteOperation(
             this,
             srcFileList,
             currentDir(),
             deleteSourceFiles,
             FileListPasteOperation.PasteCollisionMode.RESOLVE_LATER
         )
+    }
 
     fun removeFileEntries(pathList: List<Path>) {
 //        pathList.forEach { Desktop.getDesktop(). }

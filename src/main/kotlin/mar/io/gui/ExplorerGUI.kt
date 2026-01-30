@@ -2,7 +2,6 @@ package mar.io.gui
 
 import mar.io.action
 import mar.io.logic.ExplorerController
-import mar.io.logic.FileListPasteOperation
 import mar.io.put
 import java.awt.*
 import java.awt.datatransfer.DataFlavor
@@ -353,23 +352,20 @@ class ExplorerGUI(
     protected fun userPaste() {
         val cb = Toolkit.getDefaultToolkit().systemClipboard
         val flavors = cb.availableDataFlavors
-        val op: FileListPasteOperation = runCatching {
+        runCatching {
             if (flavors.contains(CutOrCopyFileListTransferable.CUT_FILE_LIST_FLAVOR)) {
                 @Suppress("UNCHECKED_CAST")
-                val pathList: List<Path> = cb.getData(CutOrCopyFileListTransferable.CUT_FILE_LIST_FLAVOR) as List<Path>
-                return@runCatching controller.startFilePasteOperation(pathList, true)
+                val srcFiles = cb.getData(CutOrCopyFileListTransferable.CUT_FILE_LIST_FLAVOR) as List<Path>
+                return@runCatching controller.startFilePasteOperation(srcFiles, true)
             } else if (flavors.contains(DataFlavor.javaFileListFlavor)) {
                 @Suppress("UNCHECKED_CAST")
-                val pathList: List<Path> = (cb.getData(DataFlavor.javaFileListFlavor) as List<File>).map { it.toPath() }
-                return@runCatching controller.startFilePasteOperation(pathList, false)
+                val srcFiles = (cb.getData(DataFlavor.javaFileListFlavor) as List<File>).map { it.toPath() }
+                return@runCatching controller.startFilePasteOperation(srcFiles, false)
             }
             return
         }.onFailure {
-            // TODO: error handling
-            return
-        }.getOrThrow()
-        controller.updateFileList()
-        // TODO: handle errors and collisions
+            showErrorDialog("File Paste Init", "Failed to initialize file paste operation:", it)
+        }
         // TODO: select the pasted files in the list after
 //        if (!targets.values.isEmpty())
 //            updateFileList(targets.values.find { true })
@@ -387,6 +383,10 @@ class ExplorerGUI(
     fun showFavoriteFileExceptionDialog(e: Exception) {
         val msg = "Could not ensure that favorites file exists"
         JOptionPane.showMessageDialog(null, msg, "Exception occured", JOptionPane.ERROR_MESSAGE)
+    }
+
+    fun showErrorDialog(title: String, message: String, t: Throwable) {
+        JOptionPane.showMessageDialog(controller.frame, "$title\n$t", title, JOptionPane.ERROR_MESSAGE)
     }
 
     fun showExceptionDialog(t: Throwable) {
@@ -427,7 +427,7 @@ class ExplorerGUI(
 
     /**
      * @param trySelect try to select this value after updating the list. If null, try to preserve the previous
-     *    selection
+     * selection
      * @param clearSelection when this is true, clear the selection and ignore [trySelect]
      */
     fun updateFileList(trySelect: Path? = null, clearSelection: Boolean = false) {

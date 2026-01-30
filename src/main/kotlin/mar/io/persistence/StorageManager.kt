@@ -3,9 +3,6 @@ package mar.io.persistence
 import mar.io.logic.ExplorerController
 import mar.io.logic.ExplorerFavoriteEntry
 import mar.io.logic.ExplorerState
-import mar.io.persistence.StorageManager.Companion.FILE_EXPLORER_STATE
-import mar.io.persistence.StorageManager.Companion.KEY_CURRENT_DIR
-import mar.io.persistence.StorageManager.Companion.KEY_SELECTED_FILE
 import java.io.Writer
 import java.nio.file.Files
 import java.nio.file.Path
