@@ -227,6 +227,7 @@ class ExplorerController(
             deleteSourceFiles,
             FileListPasteOperation.PasteCollisionMode.RESOLVE_LATER
         )
+        op.execute()
     }
 
     fun removeFileEntries(pathList: List<Path>) {
