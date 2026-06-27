@@ -397,13 +397,13 @@ class ExplorerGUI(
         JOptionPane.showMessageDialog(null, msg, "Exception occured", JOptionPane.ERROR_MESSAGE)
     }
 
-    fun confirmTrashNotSupportedDialog(): Boolean {
-        return JOptionPane.showConfirmDialog(
+    fun showTrashNotSupportedDialog() {
+        return JOptionPane.showMessageDialog(
             null,
-            "Trash is not supported, delete file anyway?\nThis means that the file will not be recoverable",
+            "Trash is not supported. Do not contact the developer about this :)",
             "Delete file?",
-            JOptionPane.YES_NO_OPTION
-        ) == JOptionPane.YES_OPTION
+            JOptionPane.ERROR_MESSAGE
+        )
     }
 
     /** set the text in the address bar */

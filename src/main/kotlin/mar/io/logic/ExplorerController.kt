@@ -1,14 +1,14 @@
 package mar.io.logic
 
+import com.sun.jna.platform.FileUtils
 import mar.io.gui.ExplorerGUI
-import mar.io.isTrashSupported
 import mar.io.persistence.ExplorerPersistentState
 import mar.io.persistence.StorageManager
 import java.awt.Desktop
-import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.util.*
 import javax.swing.JFrame
 import kotlin.io.path.*
 
@@ -84,29 +84,32 @@ class ExplorerController(
             return false
         }
 
-    @OptIn(ExperimentalPathApi::class)
+    //    @OptIn(ExperimentalPathApi::class)
     fun tryDeleteFileEntry(path: Path? = null) {
         if (path == null) return
-        if (isTrashSupported()) {
-//            val name = "temp_test.ttxttest"
-//            val newFile = currentDir().parent.resolve(name)
-//            newFile.createFile()
-            // calling moveToTrash here normally seems to breifly block all user input
-            // TODO use asynchronous task. This is more suitable for larger delete operations anyway
-            if (!Desktop.getDesktop().moveToTrash(path.toFile())) {
-                // TODO: exception
+        // Calling the (awt) Desktop::moveToTrash function here seems to breifly block all user input.
+        // Using an extra thread does not fix this, neither does using a coroutine.
+        // My solution to this is implementing Java Native Library, which adds it's own recycle bin feature that works on Windows 10
+        val fileUtils = FileUtils.getInstance()
+        if (!fileUtils.hasTrash()) {
+            gui.showTrashNotSupportedDialog()
+            return
+        }
+        // safety copy :)
+//        val sibling = path.resolveSibling("${path.nameWithoutExtension}_${UUID.randomUUID()}.${path.extension}")
+//        path.copyTo(sibling, overwrite = false)
+//        if (!sibling.exists())
+//            return
+        try {
+            fileUtils.moveToTrash(path.toFile())
+            if (path.exists()) {
                 gui.showDeletionFailedDialog(path)
                 return
             }
-        } else {
-            gui.confirmTrashNotSupportedDialog()
-            // TODO: implement custom trash can feature? Will this ever be necessary?
-            //  -> Research when trash is not supported
-            
-            // do not cause unnecessary GUI update, since we didn't delete anything. It would be inconsistent
-            return
+            reloadFileList(true, true)
+        } catch (e: Exception) {
+            gui.showDeletionFailedDialog(path)
         }
-        reloadFileList(true, false)
     }
 
     fun tryLeaveCurrentDir() {

@@ -14,6 +14,8 @@ repositories {
 dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+    // Source: https://mvnrepository.com/artifact/net.java.dev.jna/jna-platform
+    implementation("net.java.dev.jna:jna-platform:5.19.1")
 }
 
 // Deprecated
