@@ -22,6 +22,7 @@ class FilePasteTaskGUI(frame: JFrame, task: FilePasteTask) {
         dialog = JDialog(frame)
         dialog.title = "File Paste Task"
         dialog.modalityType = Dialog.ModalityType.APPLICATION_MODAL
+        // I am not sure what this refers to
         // TODO: use something to cancel the operation when the user clicks X or ALT+F4
 //        dialog.defaultCloseOperation = WindowConstants.DISPOSE_ON_CLOSE
         dialog.addWindowListener(object : WindowAdapter() {
@@ -65,15 +66,10 @@ class FilePasteTaskGUI(frame: JFrame, task: FilePasteTask) {
             it.add(createBtn("Create Sibling", FilePasteHandler.CollisionMode.CREATE_SIBLING))
             it.add(createBtn("Skip", FilePasteHandler.CollisionMode.MARK_RESOLVED))
         }
-        // general error
-        // TODO: general error
-        // ---
+        // general error (I assume this means, we should check for or set a general error somewhere around here)
         val cancelBtn = JButton("Cancel").also {
             it.addActionListener { task.cancel() }
         }
-        // TODO: cancel on escape
-        // TODO: hotkeys in general
-
         rootPanel.add(JLabel("Pasting ${task.handler.fileCount()} file(s) -> '${task.handler.destinationDir.absolutePathString()}'.").also {
             it.font = it.font.deriveFont(15F)
         })
@@ -93,7 +89,8 @@ class FilePasteTaskGUI(frame: JFrame, task: FilePasteTask) {
             src: ${op.srcFile.absolutePathString()}
             dst: ${op.actualTarget.absolutePathString()}
         """.trimIndent()
-        // TODO: change mode for all operations option
+        // TODO: think about & eventually introduce options to handle multiple collisions at a time.
+        // Either set the mode for all collisions or make the option dependinng on collision type
         rootPanel.add(collisionPanel, errorComponentIndex)
         rootPanel.revalidate()
         rootPanel.repaint()
@@ -106,7 +103,7 @@ class FilePasteTaskGUI(frame: JFrame, task: FilePasteTask) {
     }
 
     fun removeError() = SwingUtilities.invokeLater {
-        // TODO: think of something
+        // TODO: think of something (what should this even do?)
     }
 
     fun destroy() = SwingUtilities.invokeLater {

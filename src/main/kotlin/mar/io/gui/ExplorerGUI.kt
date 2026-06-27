@@ -126,7 +126,6 @@ class ExplorerGUI(
                     when {
                         path.isDirectory() -> label.icon = dirIcon
                         path.isRegularFile() -> label.icon = fileIcon
-                        // TODO: link
                     }
                     return label
                 }
@@ -330,14 +329,11 @@ class ExplorerGUI(
     }
 
     protected fun userDeletePath() {
-        // TODO: only skip confirmation when shift is pressed or smth
         val currentFiles = getEffectiveFileList(controller.fileList()).toMutableList()
         val selectedPath = selectedPath() ?: return
         val deletedIndex: Int = currentFiles.indexOf(selectedPath)
         if (deletedIndex < 0 || !currentFiles.remove(selectedPath)) {
             println("FATAL: Trying to delete '${selectedPath.invariantSeparatorsPathString}', but path is not in file list!")
-            // since the file list has deynced, we need to fix the selection
-            this.fileList.selectedIndex = 0
             return
         }
         try {
@@ -366,8 +362,8 @@ class ExplorerGUI(
         val cb = Toolkit.getDefaultToolkit().systemClipboard
         CutOrCopyFileListTransferable.getOrNull(cb)?.let { t ->
             runCatching {
+                // TODO: review this process; show progress bar, or make that information otherwise accessible
                 controller.startFilePasteTask(t.copiedPaths, t.isCutOperation)
-                // TODO: show progress bar on the bottom or smth
             }.onFailure {
                 showErrorDialog("File Paste Init", "Failed to initialize file paste operation:", it)
             }

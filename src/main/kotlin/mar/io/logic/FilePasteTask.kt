@@ -40,6 +40,9 @@ class FilePasteTask(val controller: ExplorerController, val handler: FilePasteHa
                         }
                         if (errorType == FilePasteHandler.ErrorType.COLLISION) {
                             // prompt user for new collision mode
+                            // TODO: we should apparently use 'suspendCancellableCoroutine' here instead, since it
+                            //  automatically (?)  also cancels this block via Exception when the Job is completed or cancelled. 
+                            //  This might remove the need to call 'ensureActive' after the block has finished. CHECK AGAIN
                             suspendCoroutine {
                                 this@FilePasteTask.collisionContinuation = it
                                 gui.setCollisionError(failedOp)
@@ -62,7 +65,7 @@ class FilePasteTask(val controller: ExplorerController, val handler: FilePasteHa
                     }
                 }
             }
-            // TODO: timeout?
+            // TODO: Safety: use a timeout for paste tasks to make sure they don't deadlock somehow.
         }
         job?.invokeOnCompletion { throwable ->
             if (throwable == null && !isCancelled) {

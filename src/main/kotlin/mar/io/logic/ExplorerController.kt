@@ -156,7 +156,8 @@ class ExplorerController(
         val curDir = currentDir()
         val newFav = ExplorerFavoriteEntry(curDir.name, curDir)
         var favs = favorites()
-        // TODO: prevent duplicate names?
+        // TODO: prompt the user when they create a new entry to let them set the name directly
+        // also allow the creation of duplicate entries.
         val duplicateFav = favs.find { it.name == newFav.name }
         if (duplicateFav != null) {
             println("DEBUG: New favorite $newFav has a duplicate (by name): $duplicateFav")
@@ -190,8 +191,6 @@ class ExplorerController(
      * @param srcFileList The files that should be pasted
      * @param deleteSourceFiles If true, will try to delete the source files after copying them to their new location.
      * This is used equivalent to a cut operation.
-     *
-     * TODO: ui for minimized ops. also log? "copioed # files from x to y"
      */
     @OptIn(ExperimentalPathApi::class)
     fun startFilePasteTask(srcFileList: List<Path>, deleteSourceFiles: Boolean) {

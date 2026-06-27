@@ -149,14 +149,14 @@ class FilePasteHandler(
             when (collisionMode) {
                 CollisionMode.CREATE_SIBLING -> {
                     var copies = 1
-                    while (actualTarget.exists()) { // TODO: safe-guard: limit amount of copies or smth
+                    while (actualTarget.exists()) {
                         actualTarget = originalTarget.resolveSibling(
                             "${originalTarget.nameWithoutExtension}" +
                                     "_copy${copies++}.${originalTarget.extension}"
                         )
                     }
                 }
-                // TODO: overwrite mode; directory merge mode
+                // TODO: implement OVERWRITE collision mode
                 CollisionMode.MARK_RESOLVED -> {
                     this@PasteOperation.state = State.DONE
                     return
@@ -195,6 +195,13 @@ class FilePasteHandler(
                 If there is a directory collision, the function will perform a directory merge operation. This operation
                 is not desired, but it shouldn't break or delete anything so it's fine.
                  */
+                /* TODO: If the target file is a directory and a collision happens while calling the following function,
+                    it will apparently merge those two directories, which is not desired.
+                    Hence we need to specify the copyAction in the function parameters. We should first check, however,
+                    if the underlying function that does the copying actually detects file collisions while copying or simply
+                    performs a check before. In the latter case the it would be pointless to use it,
+                    since we do a precondition check already.
+                 */
                 srcFile.copyToRecursively(actualTarget, onError = { src, target, exception ->
                     /* 
                     FileAlreadyExistException here means a collision has happened because a file was created after the
@@ -202,14 +209,14 @@ class FilePasteHandler(
                     */
                     throw exception
                 }, followLinks = false)
-                // TODO: overwrite behavior, directory merge
                 this.state = State.TARGET_PASTED
             }
             if (state == State.TARGET_PASTED) {
                 if (!shouldDeleteSrc) {
                     this.state = State.DONE
                 }
-                // TODO: delete source (verify that the target was pasted)
+                // TODO: Verify that the target files where successfully pasted in the correct location.
+                //  ONLY THEN can we delete the source files in case a cut operation was used to copy them.
             }
         }
 

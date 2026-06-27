@@ -70,7 +70,7 @@ class StorageManager(
     val stateFile: Path = storagePath.resolve(FILE_EXPLORER_STATE)
 
     fun read(): ExplorerPersistentState {
-        // TODO: Maybe check the version file???
+        // TODO: Check the version file. Also define the version file and support backwards-compatibility
         println("DEBUG: Checking state file '${stateFile.invariantSeparatorsPathString}'")
         val stateMap = mutableMapOf<String, String?>()
         if (Files.exists(stateFile) && Files.isRegularFile(stateFile)) {
@@ -128,11 +128,11 @@ class StorageManager(
         return true
     }
 
-    // TODO: error handling, logging
     fun write(state: ExplorerPersistentState) {
         Files.createDirectories(storagePath)
         val versionFile = storagePath.resolve(FILE_VERSION)
-        // TODO: Techically we should have a lock file but oh well. Only use it for single operations tho, so we can have multiple instances of the app
+        // TODO: Use some sort of a lock file to ensure that two instances of different version cannot access the storage
+        //  at the same time.
         if (!(Files.exists(versionFile) && Files.isRegularFile(versionFile))) versionFile.createFile()
         versionFile.writeText("1.0")
         if (!(Files.exists(stateFile) && Files.isRegularFile(stateFile))) stateFile.createFile()
