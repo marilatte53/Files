@@ -2,6 +2,12 @@
 
 by Mario for Mario
 
+## Currently working on:
+
+- deleting a file entry (using the trash can feature) briefly blocks user input. 
+  Try if this is fixed when doing it in another thread.
+  If not, implement custom trash can behavior or try using a JNI to access the trash can that way.  
+
 ## Ideas
 
 - modification:

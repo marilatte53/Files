@@ -12,5 +12,5 @@ fun main() {
     frame.defaultCloseOperation = WindowConstants.EXIT_ON_CLOSE
     frame.add(contr.gui.rootPanel)
     frame.isVisible = true
-    contr.gui.focusFileList()
+    contr.gui.requestFocus()
 }

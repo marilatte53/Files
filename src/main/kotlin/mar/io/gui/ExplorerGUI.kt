@@ -4,9 +4,7 @@ import mar.io.action
 import mar.io.logic.ExplorerController
 import mar.io.put
 import java.awt.*
-import java.awt.datatransfer.DataFlavor
 import java.awt.event.*
-import java.io.File
 import java.nio.file.Path
 import java.util.function.Predicate
 import java.util.stream.Collectors
@@ -15,6 +13,7 @@ import javax.swing.text.AbstractDocument
 import javax.swing.text.AttributeSet
 import javax.swing.text.DocumentFilter
 import kotlin.io.path.*
+import kotlin.math.min
 
 class ExplorerGUI(
     val controller: ExplorerController
@@ -99,13 +98,13 @@ class ExplorerGUI(
         fileList.selectedIndex = 0
         // Enter directory or open file with default application
         fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "enterOrExecute")
-        fileList.actionMap.put("enterOrExecute") { selectedPath()?.let(controller::enterOrExecute) }
+        fileList.actionMap.put("enterOrExecute") { selectedPath()?.let(controller::enterDirOrExecuteFile) }
         fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_BACK_SPACE, 0), "leaveDir")
         fileList.actionMap.put("leaveDir") { controller.tryLeaveCurrentDir() }
         fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "dropFilters")
         fileList.actionMap.put("dropFilters") {
             clearFilter()
-            controller.updateFileList()
+            controller.reloadFileList()
         }
         fileList.cellRenderer =
             object : DefaultListCellRenderer() {
@@ -158,12 +157,14 @@ class ExplorerGUI(
         fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_X, InputEvent.CTRL_DOWN_MASK), "cutSelection")
         fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_C, InputEvent.CTRL_DOWN_MASK), "copySelection")
         fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_V, InputEvent.CTRL_DOWN_MASK), "paste")
+//        fileList.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_L, InputEvent.CTRL_DOWN_MASK), "test")
         fileList.actionMap.put("createDir") { userCreateDir() }
         fileList.actionMap.put("createFile") { userCreateFile() }
         fileList.actionMap.put("deletePath") { userDeletePath() }
         fileList.actionMap.put("cutSelection") { userCutOrCopy(true) }
         fileList.actionMap.put("copySelection") { userCutOrCopy(false) }
         fileList.actionMap.put("paste") { userPaste() }
+//        fileList.actionMap.put("test") { this.fileList.selectedIndex++ }
         val ctxMenu = JPopupMenu("test")
         val iCreateDir = JMenuItem("New Directory")
         iCreateDir.addActionListener { userCreateDir() }
@@ -181,16 +182,27 @@ class ExplorerGUI(
                 text: String?,
                 attrs: AttributeSet?
             ) {
-                // Store the old filter in case the new one doesn't find anything
-                this@ExplorerGUI.previousFilter = filterBar.text
+                val f = filterBar.text
                 super.replace(fb, offset, length, text, attrs) // actually change the filter text
-                controller.updateFileList() // reload the file list, the rest is automatically handled by this
+                adjustFilter(f)
+                controller.reloadFileList()
             }
 
             override fun remove(fb: FilterBypass?, offset: Int, length: Int) {
-                this@ExplorerGUI.previousFilter = filterBar.text
+                val f = filterBar.text
                 super.remove(fb, offset, length)
-                controller.updateFileList()
+                adjustFilter(f)
+                controller.reloadFileList()
+            }
+
+            fun adjustFilter(previousFilter: String) {
+                controller.reloadFileList(false)
+                val files = controller.fileList()
+                // uses filter getter from ExplorerGui class
+                if (getEffectiveFileList(files).isEmpty() && !filter.isNullOrEmpty() && !files.isEmpty()) {
+                    // filtered file list is empty (but unfiltered file list is not) -> don't accept the new filter
+                    this@ExplorerGUI.filter = previousFilter
+                }
             }
         }
         filterBar.inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "dropFocus")
@@ -319,25 +331,26 @@ class ExplorerGUI(
 
     protected fun userDeletePath() {
         // TODO: only skip confirmation when shift is pressed or smth
-        val fileList = makeFileListUsable(controller.fileList()).toMutableList()
+        val currentFiles = getEffectiveFileList(controller.fileList()).toMutableList()
         val selectedPath = selectedPath() ?: return
-        val deletedIndex: Int = fileList.indexOf(selectedPath)
-        if (deletedIndex < 0 || !fileList.remove(selectedPath)) {
+        val deletedIndex: Int = currentFiles.indexOf(selectedPath)
+        if (deletedIndex < 0 || !currentFiles.remove(selectedPath)) {
             println("FATAL: Trying to delete '${selectedPath.invariantSeparatorsPathString}', but path is not in file list!")
             // since the file list has deynced, we need to fix the selection
-            trySelectInFileList(null)
+            this.fileList.selectedIndex = 0
             return
         }
-        controller.tryDeleteFileEntry(selectedPath)
-        // fix the selection in case of desync or deleting the last file in the list
-        if (fileList.isEmpty())
-            trySelectInFileList(null)
-        else if (deletedIndex == 0)
-            trySelectInFileList(fileList[0])
-        else if (deletedIndex >= fileList.size)
-            trySelectInFileList(fileList[fileList.size - 1])
-        else
-            trySelectInFileList(fileList[deletedIndex - 1])
+        try {
+            controller.tryDeleteFileEntry(selectedPath)
+            if (currentFiles.isEmpty())
+                this.fileList.selectedIndex = 0
+            if (deletedIndex >= currentFiles.size)
+                this.fileList.selectedIndex = currentFiles.size - 1
+            else
+                this.fileList.selectedIndex = deletedIndex
+        } catch (e: Exception) {
+            showExceptionDialog(e)
+        }
     }
 
     protected fun userCutOrCopy(cut: Boolean) {
@@ -351,24 +364,14 @@ class ExplorerGUI(
 
     protected fun userPaste() {
         val cb = Toolkit.getDefaultToolkit().systemClipboard
-        val flavors = cb.availableDataFlavors
-        runCatching {
-            if (flavors.contains(CutOrCopyFileListTransferable.CUT_FILE_LIST_FLAVOR)) {
-                @Suppress("UNCHECKED_CAST")
-                val srcFiles = cb.getData(CutOrCopyFileListTransferable.CUT_FILE_LIST_FLAVOR) as List<Path>
-                return@runCatching controller.startFilePasteOperation(srcFiles, true)
-            } else if (flavors.contains(DataFlavor.javaFileListFlavor)) {
-                @Suppress("UNCHECKED_CAST")
-                val srcFiles = (cb.getData(DataFlavor.javaFileListFlavor) as List<File>).map { it.toPath() }
-                return@runCatching controller.startFilePasteOperation(srcFiles, false)
+        CutOrCopyFileListTransferable.getOrNull(cb)?.let { t ->
+            runCatching {
+                controller.startFilePasteTask(t.copiedPaths, t.isCutOperation)
+                // TODO: show progress bar on the bottom or smth
+            }.onFailure {
+                showErrorDialog("File Paste Init", "Failed to initialize file paste operation:", it)
             }
-            return
-        }.onFailure {
-            showErrorDialog("File Paste Init", "Failed to initialize file paste operation:", it)
-        }
-        // TODO: select the pasted files in the list after
-//        if (!targets.values.isEmpty())
-//            updateFileList(targets.values.find { true })
+        } ?: return
     }
 
     fun showDeletionFailedDialog(path: Path) {
@@ -410,11 +413,10 @@ class ExplorerGUI(
 
     fun selectedPath(): Path? = fileList.selectedValue
 
-    fun makeFileListUsable(rawFiles: List<Path>): List<Path> {
+    fun getEffectiveFileList(rawFiles: List<Path>): List<Path> {
         val usableFiles =
             // Filter files by primary filter
             rawFiles.stream().let { fileList ->
-                // don't do unnecessary work
                 if (filter.isNullOrEmpty()) fileList.toList()
                 else fileList.collect(Collectors.groupingBy { file ->
                     if (STARTS_WITH_FILTER.test(file)) 0
@@ -426,45 +428,56 @@ class ExplorerGUI(
     }
 
     /**
-     * @param trySelect try to select this value after updating the list. If null, try to preserve the previous
-     * selection
-     * @param clearSelection when this is true, clear the selection and ignore [trySelect]
+     * @param tryMaintainSelection Tries to select the same list entry as before. If not possible, tries to select the
+     * same index, capped at the maximum list size.
      */
-    fun updateFileList(trySelect: Path? = null, clearSelection: Boolean = false) {
+    fun updateFileList(tryMaintainSelection: Boolean = true) {
         setAddress(controller.currentDir())
-        var files = makeFileListUsable(controller.fileList())
-        if (!filter.isNullOrEmpty() && files.isEmpty()) { // Is the current filter invalid?
-            // -> try the previous filter
-            this.filter = previousFilter
-            // in case of file system changes, we need to validate the old filter again
-            files = makeFileListUsable(controller.fileList())
-            if (!filter.isNullOrEmpty() && files.isEmpty()) {// old filter is invalid too
-                clearFilter()
-                // and of course get the files again
-                files = makeFileListUsable(controller.fileList())
-            }
-        }
-        // clear the previous filter, since it has been 'used up'
-        previousFilter = null
+        val files = controller.fileList()
+        val effectiveFiles = getEffectiveFileList(files)
         val previousSelection = selectedPath()
+        val previousIndex = this.fileList.selectedIndex
         fileListModel.removeAllElements()
-        fileListModel.addAll(files)
-        val newSel =
-            if (clearSelection) null
-            else trySelect ?: previousSelection
-        trySelectInFileList(newSel)
+        if (effectiveFiles.isEmpty())
+            return
+        fileListModel.addAll(effectiveFiles)
+        if (!tryMaintainSelection)
+            return
+        if (!trySelectFile(previousSelection)) {
+            this.fileList.selectedIndex = min(previousIndex, fileListModel.size())
+        }
     }
 
     /** When path is null, the first file will be selected */
-    fun trySelectInFileList(path: Path?): Boolean {
+    fun trySelectFile(path: Path?): Boolean {
         fileList.setSelectedValue(path, true)
         if (fileList.selectedValue != null) return true
-        fileList.selectedIndex = 0
+        trySelectIndex(0)
         return false
     }
 
+    fun trySelectFiles(paths: List<Path>): Boolean {
+        val indices = paths.mapNotNull {
+            val ind = fileListModel.indexOf(it)
+            if (ind == -1)
+                return@mapNotNull null
+            return@mapNotNull ind
+        }.toIntArray()
+        if (indices.isEmpty()) {
+            trySelectIndex(0)
+            return false
+        }
+        fileList.selectedIndices = indices
+        return true
+    }
+
+    fun trySelectIndex(index: Int) {
+        fileList.selectedIndex = index
+        fileList.ensureIndexIsVisible(index)
+    }
+
     /** Currently this is only used in Main */
-    fun focusFileList() {
+    fun requestFocus() {
         fileList.requestFocusInWindow()
     }
 

@@ -5,22 +5,12 @@ import mar.io.isTrashSupported
 import mar.io.persistence.ExplorerPersistentState
 import mar.io.persistence.StorageManager
 import java.awt.Desktop
-import java.io.IOException
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import javax.swing.JFrame
-import kotlin.io.path.ExperimentalPathApi
-import kotlin.io.path.absolute
-import kotlin.io.path.absolutePathString
-import kotlin.io.path.createDirectory
-import kotlin.io.path.createFile
-import kotlin.io.path.deleteRecursively
-import kotlin.io.path.exists
-import kotlin.io.path.isDirectory
-import kotlin.io.path.isSameFileAs
-import kotlin.io.path.name
-import kotlin.io.path.pathString
+import kotlin.io.path.*
 
 class ExplorerController(
     val frame: JFrame
@@ -37,19 +27,19 @@ class ExplorerController(
 
     init {
         this.gui = ExplorerGUI(this)
-        // TODO: why is this not in catch clause
-        this.state = ExplorerState(this, getFallbackPath())
         try {
             val readState = storage.read()
-            loadPersistentState(readState)
+            this.state = ExplorerState(this, readState.currentDir)
+            gui.trySelectFile(readState.selectedPath)
         } catch (e: Exception) {
             println("INFO: Failed to read state file, using default state")
-            updateFileList() // This is also called when loadPersistentState is successful
+            this.state = ExplorerState(this, getFallbackPath())
         }
+        reloadFileList(true, true)
         Runtime.getRuntime().addShutdownHook(Thread(::runOnShutdown))
     }
 
-    fun enterOrExecute(path: Path) {
+    fun enterDirOrExecuteFile(path: Path) {
         val p = path.absolute().normalize()
         if (!p.exists())
             return
@@ -72,57 +62,59 @@ class ExplorerController(
      */
     fun tryEnterDir(path: Path): Boolean =
         runCatching {
-            val newDir = if (path.toString().isBlank()) getFallbackPath() else path.toRealPath()
+            val newDir = path.toRealPath()
             if (!newDir.exists())
                 return@runCatching false
             if (currentDir().isSameFileAs(newDir))
                 return@runCatching true
-            if (newDir.isDirectory()) {
-                state.currentDir = newDir
-                state.directoriesAccessed.readAndWrite { it.notify(path) }
-                return@runCatching true
-            }
-            return@runCatching false
+            if (!newDir.isDirectory())
+                return@runCatching false
+            state.currentDir = newDir
+            state.directoriesAccessed.readAndWrite { it.notify(path) }
+            return@runCatching true
         }.onSuccess {
+            if (!it)
+                return@onSuccess
             gui.clearFilter()
-            updateFileList()
+            reloadFileList(true, false)
+            gui.trySelectIndex(0)
         }.getOrElse {
             it.printStackTrace()
             gui.showExceptionDialog(it)
-            return@getOrElse false
+            return false
         }
 
     @OptIn(ExperimentalPathApi::class)
     fun tryDeleteFileEntry(path: Path? = null) {
         if (path == null) return
-        try {
-            if (isTrashSupported()) {
-                if (!Desktop.getDesktop().moveToTrash(path.toFile())) {
-                    gui.showDeletionFailedDialog(path)
-                    return
-                }
-            } else {
-                if (!gui.confirmTrashNotSupportedDialog())
-                    return
-                try {
-                    path.deleteRecursively()
-                } catch (e: IOException) {
-                    e.printStackTrace()
-                    gui.showDeletionFailedDialog(path)
-                    return
-                }
+        if (isTrashSupported()) {
+//            val name = "temp_test.ttxttest"
+//            val newFile = currentDir().parent.resolve(name)
+//            newFile.createFile()
+            // calling moveToTrash here normally seems to breifly block all user input
+            // TODO use asynchronous task. This is more suitable for larger delete operations anyway
+            if (!Desktop.getDesktop().moveToTrash(path.toFile())) {
+                // TODO: exception
+                gui.showDeletionFailedDialog(path)
+                return
             }
-            updateFileList()
-        } catch (e: Exception) {
-            gui.showExceptionDialog(e)
+        } else {
+            gui.confirmTrashNotSupportedDialog()
+            // TODO: implement custom trash can feature? Will this ever be necessary?
+            //  -> Research when trash is not supported
+            
+            // do not cause unnecessary GUI update, since we didn't delete anything. It would be inconsistent
+            return
         }
+        reloadFileList(true, false)
     }
 
     fun tryLeaveCurrentDir() {
         if (state.currentDir.parent == null) return // In case the current dir is a drive 
         val oldDir = state.currentDir
         state.currentDir = state.currentDir.parent
-        updateFileList(oldDir)
+        reloadFileList(true, false)
+        gui.trySelectFile(oldDir)
     }
 
     /**
@@ -137,7 +129,8 @@ class ExplorerController(
 //        if (newDir.isDirectory() && newDir.exists()) return false
         try {
             newDir.createDirectory()
-            updateFileList(newDir)
+            reloadFileList(true, false)
+            gui.trySelectFile(newDir)
         } catch (e: Exception) {
             println("INFO: Failed to create dir. ${e::class.simpleName}: ${e.message}")
             throw e
@@ -148,40 +141,19 @@ class ExplorerController(
         val newFile = state.currentDir.resolve(fileName)
         try {
             newFile.createFile()
-            updateFileList(newFile)
+            reloadFileList(true, false)
+            gui.trySelectFile(newFile)
         } catch (e: Exception) {
             println("INFO: Failed to create dir. ${e::class.simpleName}: ${e.message}")
             throw e
         }
     }
 
-    /** Reload the file list from disk and adjust the GUI accordingly */
-    fun updateFileList(newSelection: Path? = null) {
-        val files =
-            try {
-                Files.list(state.currentDir)
-            } catch (e: Exception) {
-                println("INFO: ${e::class.simpleName} Cannot list files in currentDir ('${state.currentDir}'): ${e.message}")
-                val fallbackPath = getFallbackPath()
-                println("INFO: Trying fallback dir ('${fallbackPath.pathString}')")
-                try {
-                    state.currentDir = fallbackPath
-                    println("INFO: Using fallback dir now")
-                    Files.list(fallbackPath)
-                } catch (e: Exception) {
-                    println("FATAL: Fallback failed. Check the fallback directory.")
-                    return
-                }
-            }
-        state.cachedFileList = files.toList()
-        gui.updateFileList(newSelection)
-    }
-
     fun addCurrentDirFavorite() {
         val curDir = currentDir()
         val newFav = ExplorerFavoriteEntry(curDir.name, curDir)
         var favs = favorites()
-        // TODO: show name dialog with validation for already existing names
+        // TODO: prevent duplicate names?
         val duplicateFav = favs.find { it.name == newFav.name }
         if (duplicateFav != null) {
             println("DEBUG: New favorite $newFav has a duplicate (by name): $duplicateFav")
@@ -208,30 +180,23 @@ class ExplorerController(
     }
 
     /**
-     * Starts a [FileListPasteOperation] as a background operation at first. If it takes to long, it will block the main
-     * frame and show a progress bar. The user can then minimize it to continue in the background again. If there are
-     * any errors, the blocking frame will pop up again and prompt the user on how to proceed.
-     * 
-     * TODO: ui for minimized ops. also log? "copioed # files from x to y"
+     * Starts a [FilePasteHandler] as a background operation at first. If it takes to long, it will block the main frame
+     * and show a progress bar. The user can then minimize it to continue in the background again. If there are any
+     * errors, the blocking frame will pop up again and prompt the user on how to proceed.
      *
      * @param srcFileList The files that should be pasted
      * @param deleteSourceFiles If true, will try to delete the source files after copying them to their new location.
      * This is used equivalent to a cut operation.
+     *
+     * TODO: ui for minimized ops. also log? "copioed # files from x to y"
      */
     @OptIn(ExperimentalPathApi::class)
-    fun startFilePasteOperation(srcFileList: List<Path>, deleteSourceFiles: Boolean) {
-        val op = FileListPasteOperation(
-            this,
-            srcFileList,
-            currentDir(),
-            deleteSourceFiles,
-            FileListPasteOperation.PasteCollisionMode.RESOLVE_LATER
-        )
-        op.execute()
-    }
-
-    fun removeFileEntries(pathList: List<Path>) {
-//        pathList.forEach { Desktop.getDesktop(). }
+    fun startFilePasteTask(srcFileList: List<Path>, deleteSourceFiles: Boolean) {
+        val mode: FilePasteHandler.CollisionMode =
+            if (srcFileList.size == 1) FilePasteHandler.CollisionMode.CREATE_SIBLING else FilePasteHandler.CollisionMode.RETRY
+        val op = FilePasteHandler(srcFileList, currentDir(), deleteSourceFiles, mode)
+        val c = FilePasteTask(this, op)
+        c.start()
     }
 
     fun currentDir() = state.currentDir
@@ -241,14 +206,33 @@ class ExplorerController(
     fun recentDirsAT(max: Long) = state.directoriesAccessed.readAndGet().sortedByAccessTime(max)
     fun recentDirsAC(max: Long) = state.directoriesAccessed.readAndGet().sortedByAccessCount(max)
 
-    /** Set the current state and GUI state according to the PersistentState */
-    protected fun loadPersistentState(pState: ExplorerPersistentState) {
-        val newState = ExplorerState(this, pState.currentDir)
-        this.state = newState
-        // This will update the GUI file list as well as selection
-        updateFileList()
-        // Adjust selection, in case this doesn't work, we already have a default selection
-        gui.trySelectInFileList(pState.selectedPath)
+    /**
+     * Reloads the file list of the current directory from disk.
+     *
+     * @param updateGui If true, also calls [ExplorerGUI.updateFileList]
+     * @param tryMaintainSelection Passed to the gui update, only used when [updateGui] is true
+     */
+    fun reloadFileList(updateGui: Boolean = true, tryMaintainSelection: Boolean = true) {
+        val files =
+            try {
+                Files.list(state.currentDir)
+            } catch (e: Exception) {
+                println("INFO: ${e::class.simpleName} Cannot list files in currentDir ('${state.currentDir}'): ${e.message}")
+                val fallbackPath = getFallbackPath()
+                println("INFO: Trying fallback dir ('${fallbackPath.pathString}')")
+                try {
+                    state.currentDir = fallbackPath
+                    println("INFO: Using fallback dir now")
+                    Files.list(fallbackPath)
+                } catch (e: Exception) {
+                    println("FATAL: Fallback failed. Check the fallback directory.")
+                    return
+                }
+            }
+        state.cachedFileList = files.toList()
+        if (!updateGui)
+            return
+        gui.updateFileList(tryMaintainSelection)
     }
 
     protected fun makePersistentState(): ExplorerPersistentState {
