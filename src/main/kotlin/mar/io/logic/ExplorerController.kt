@@ -48,7 +48,7 @@ class ExplorerController(
     }
 
     protected fun openFileUnsafe(p: Path) {
-        if (!Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+        if (!Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.EDIT)) {
             Desktop.getDesktop().edit(p.toFile())
         } else {
             ProcessBuilder("cmd.exe", "/C", "start", p.absolutePathString()).start()
