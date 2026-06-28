@@ -87,7 +87,7 @@ class ExplorerController(
     //    @OptIn(ExperimentalPathApi::class)
     fun tryDeleteFileEntry(path: Path? = null) {
         if (path == null) return
-        // Calling the (awt) Desktop::moveToTrash function here seems to breifly block all user input.
+        // Using the (awt) Desktop::moveToTrash function here seems to breifly block all user input.
         // Using an extra thread does not fix this, neither does using a coroutine.
         // My solution to this is implementing Java Native Library, which adds it's own recycle bin feature that works on Windows 10
         val fileUtils = FileUtils.getInstance()
@@ -95,11 +95,10 @@ class ExplorerController(
             gui.showTrashNotSupportedDialog()
             return
         }
-        // safety copy :)
-//        val sibling = path.resolveSibling("${path.nameWithoutExtension}_${UUID.randomUUID()}.${path.extension}")
-//        path.copyTo(sibling, overwrite = false)
-//        if (!sibling.exists())
-//            return
+        // TODO: When deleting a file, the user input is not blocked, but the file stays for a bit until the operation is complete
+        // For now: Move the selection down by 1
+        // Long-term: Show deletion process in the list and move the selection down by 1.
+        // Will have to use another thread, but that is required anyway for larger file deletions.
         try {
             fileUtils.moveToTrash(path.toFile())
             if (path.exists()) {

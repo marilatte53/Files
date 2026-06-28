@@ -1,5 +1,6 @@
 package mar.io.logic
 
+import com.sun.jna.platform.FileUtils
 import java.nio.file.Path
 import kotlin.io.path.*
 
@@ -18,6 +19,9 @@ class FilePasteHandler(
     val shouldDeleteSrc: Boolean,
     var defaultCollisionMode: CollisionMode
 ) {
+    /*
+    Paths are treated as-is and never converted to absolute or real paths UNLESS we actually access the corresponding file in the file system.
+     */
     private val operations: List<PasteOperation>
 
     /**
@@ -30,6 +34,10 @@ class FilePasteHandler(
     init {
         if (sourceFiles.isEmpty())
             throw IllegalStateException("Source file list is empty.")
+        /*
+         We check the destination directory here, since it comes from our own code and as such is very likely to pass these checks.
+         Source files are only checked when we actually need to access them later.
+         */
         if (!destinationDir.exists())
             throw IllegalStateException("Destination directory does not exist")
         if (!destinationDir.isDirectory())
@@ -37,6 +45,9 @@ class FilePasteHandler(
         // associate creates a copy to make the resulting map immutable
         this.operations = sourceFiles.also { srcFile ->
             srcFile.forEach { src ->
+                if (!src.isAbsolute) {
+                    println("WARNING: Source file '${src.invariantSeparatorsPathString}' in paste operation is not absolute!")
+                }
                 if (src.isDirectory()) {
                     /** check if the target is inside the source directory; stolen from [Path.copyToRecursively] */
                     val isSubdirectory: Boolean = when {
@@ -51,8 +62,8 @@ class FilePasteHandler(
                     }
                     if (isSubdirectory)
                         throw FileSystemException(
-                            src.toRealPath().toFile(),
-                            destinationDir.toRealPath().toFile(),
+                            src.toFile(),
+                            destinationDir.toFile(),
                             "Recursively copying a directory into its subdirectory is prohibited."
                         )
                 }
@@ -127,9 +138,6 @@ class FilePasteHandler(
         private fun effectiveCollisionMode() = collisionMode ?: defaultCollisionMode
 
         private fun checkForCollision() {
-            if (!srcFile.exists()) {
-                throw NoSuchFileException(srcFile.toRealPath().toFile(), reason = "Source file does not exist")
-            }
             if (actualTarget.exists()) {
                 this.state = State.COLLISION_DETECTED
                 return
@@ -140,7 +148,7 @@ class FilePasteHandler(
         /**
          * For this function to do something, [PasteOperation.state] must be equal to [State.COLLISION_DETECTED].
          *
-         * @throws PasteCollisionException
+         * @throws PasteException
          */
         private fun tryResolveCollision(collisionMode: CollisionMode) {
             if (state != State.COLLISION_DETECTED)
@@ -181,14 +189,17 @@ class FilePasteHandler(
                 try {
                     tryResolveCollision(effectiveCollisionMode())
                 } catch (t: Throwable) {
-                    throw PasteCollisionException(
+                    throw PasteException(
                         srcFile, originalTarget, actualTarget,
-                        "Error while resolving paste collision."
+                        "Exception occured while trying to resolve paste collision."
                     ).initCause(t)
                 }
             }
             if (state == State.COLLISION_RESOLVED) {
                 // now we try to paste the file in the target location
+                if (!srcFile.exists()) {
+                    throw NoSuchFileException(srcFile.toFile(), reason = "Source file does not exist")
+                }
                 /*
                 Due to file system concurrency, it is possible to encounter further collisions here. 
                 If there is a simple file collision, the function will throw, which is desired here.
@@ -196,11 +207,11 @@ class FilePasteHandler(
                 is not desired, but it shouldn't break or delete anything so it's fine.
                  */
                 /* TODO: If the target file is a directory and a collision happens while calling the following function,
-                    it will apparently merge those two directories, which is not desired.
+                    it will apparently merge those two directories, which is not desired
+                    (This should only happen if a directory is created AFTER our initial collision check has already passed).
                     Hence we need to specify the copyAction in the function parameters. We should first check, however,
                     if the underlying function that does the copying actually detects file collisions while copying or simply
-                    performs a check before. In the latter case the it would be pointless to use it,
-                    since we do a precondition check already.
+                    performs a check before. In the latter case it might not be useful.
                  */
                 srcFile.copyToRecursively(actualTarget, onError = { src, target, exception ->
                     /* 
@@ -209,14 +220,30 @@ class FilePasteHandler(
                     */
                     throw exception
                 }, followLinks = false)
+                if (actualTarget.notExists()) {
+                    throw PasteException(
+                        srcFile, originalTarget, actualTarget,
+                        "Target file is missing (No errors where detected while pasting the file)"
+                    )
+                }
                 this.state = State.TARGET_PASTED
             }
             if (state == State.TARGET_PASTED) {
-                if (!shouldDeleteSrc) {
+                if (shouldDeleteSrc) {
+                    // We can assume that the pasted file is present since we checked it in the COLLISION_RESOLVED stage
+                    val fileUtils = FileUtils.getInstance()
+                    // Once we implement a custom recycle bin to make a history possible, we need to change this check
+                    if (!fileUtils.hasTrash()) {
+                        throw PasteException(
+                            srcFile, originalTarget, actualTarget,
+                            "Recycle Bin is not supported. Refusing to delete source file of cut-paste operation."
+                        )
+                    }
+                    fileUtils.moveToTrash(srcFile.toFile())
+                    this.state = State.DONE
+                } else {
                     this.state = State.DONE
                 }
-                // TODO: Verify that the target files where successfully pasted in the correct location.
-                //  ONLY THEN can we delete the source files in case a cut operation was used to copy them.
             }
         }
 
@@ -252,10 +279,10 @@ class FilePasteHandler(
         fun didFail() = errorState != ErrorState.NONE
     }
 
-    class PasteCollisionException(src: Path, target: Path, val actualTarget: Path, message: String) :
+    class PasteException(src: Path, target: Path, val actualTarget: Path, message: String) :
         FileSystemException(
-            src.toRealPath().toFile(), target.toRealPath().toFile(),
-            "(${actualTarget.toRealPath().invariantSeparatorsPathString}) " + message
+            src.toFile(), target.toFile(),
+            "(${actualTarget}) " + message
         )
 
     private enum class State {

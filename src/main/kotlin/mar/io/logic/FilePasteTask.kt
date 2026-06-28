@@ -4,7 +4,6 @@ import kotlinx.coroutines.*
 import mar.io.gui.FilePasteTaskGUI
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
 import kotlin.io.path.isSameFileAs
 
 /**
@@ -39,13 +38,10 @@ class FilePasteTask(val controller: ExplorerController, val handler: FilePasteHa
                             continue
                         }
                         if (errorType == FilePasteHandler.ErrorType.COLLISION) {
-                            // prompt user for new collision mode
-                            // TODO: we should apparently use 'suspendCancellableCoroutine' here instead, since it
-                            //  automatically (?)  also cancels this block via Exception when the Job is completed or cancelled. 
-                            //  This might remove the need to call 'ensureActive' after the block has finished. CHECK AGAIN
-                            suspendCoroutine {
+                            // This prompts the user and then waits for a callback from the continuation object
+                            suspendCancellableCoroutine {
                                 this@FilePasteTask.collisionContinuation = it
-                                gui.setCollisionError(failedOp)
+                                gui.setCollisionErrorAndPromptUser(failedOp)
                             }.let { newMode ->
                                 ensureActive()
                                 failedOp.collisionMode = newMode
@@ -53,7 +49,7 @@ class FilePasteTask(val controller: ExplorerController, val handler: FilePasteHa
                             }
                         } else if (errorType == FilePasteHandler.ErrorType.GENERAL) {
                             // prompt user for new error solution
-                            suspendCoroutine {
+                            suspendCancellableCoroutine {
                                 this@FilePasteTask.errorContinuation = it
                                 gui.setGeneralError(failedOp)
                             }.let { newSolution ->
@@ -65,9 +61,9 @@ class FilePasteTask(val controller: ExplorerController, val handler: FilePasteHa
                     }
                 }
             }
-            // TODO: Safety: use a timeout for paste tasks to make sure they don't deadlock somehow.
         }
         job?.invokeOnCompletion { throwable ->
+            // TODO: notify the user if the operation did not complete successfully
             if (throwable == null && !isCancelled) {
                 this@FilePasteTask.isDone = true
             }

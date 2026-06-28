@@ -22,20 +22,18 @@ class FilePasteTaskGUI(frame: JFrame, task: FilePasteTask) {
         dialog = JDialog(frame)
         dialog.title = "File Paste Task"
         dialog.modalityType = Dialog.ModalityType.APPLICATION_MODAL
-        // I am not sure what this refers to
-        // TODO: use something to cancel the operation when the user clicks X or ALT+F4
-//        dialog.defaultCloseOperation = WindowConstants.DISPOSE_ON_CLOSE
         dialog.addWindowListener(object : WindowAdapter() {
             override fun windowDeactivated(e: WindowEvent?) {
-                println("deactivated")
             }
 
             override fun windowClosed(e: WindowEvent?) {
-                println("closed")
             }
 
             override fun windowClosing(e: WindowEvent?) {
-                println("closING")
+                // for now cancel the operation when user closes window. 
+                // Eventually it should just be hidden and made otherwise accessible.
+                // not sure if this will have any side-effects
+                task.cancel()
             }
         })
         this.rootPanel = JPanel().also {
@@ -66,7 +64,6 @@ class FilePasteTaskGUI(frame: JFrame, task: FilePasteTask) {
             it.add(createBtn("Create Sibling", FilePasteHandler.CollisionMode.CREATE_SIBLING))
             it.add(createBtn("Skip", FilePasteHandler.CollisionMode.MARK_RESOLVED))
         }
-        // general error (I assume this means, we should check for or set a general error somewhere around here)
         val cancelBtn = JButton("Cancel").also {
             it.addActionListener { task.cancel() }
         }
@@ -83,7 +80,7 @@ class FilePasteTaskGUI(frame: JFrame, task: FilePasteTask) {
         dialog.pack()
     }
 
-    fun setCollisionError(op: FilePasteHandler.PasteOperation) = SwingUtilities.invokeLater {
+    fun setCollisionErrorAndPromptUser(op: FilePasteHandler.PasteOperation) = SwingUtilities.invokeLater {
         collisionTxt.text = """
             File Collision detected:
             src: ${op.srcFile.absolutePathString()}
@@ -99,6 +96,7 @@ class FilePasteTaskGUI(frame: JFrame, task: FilePasteTask) {
     }
 
     fun setGeneralError(op: FilePasteHandler.PasteOperation) {
+        // TODO: Make a display for general errors.
         dialog.isVisible = true
     }
 

@@ -4,8 +4,6 @@ by Mario for Mario
 
 ## Currently working on:
 
--   
-
 ## Ideas
 
 - modification:
