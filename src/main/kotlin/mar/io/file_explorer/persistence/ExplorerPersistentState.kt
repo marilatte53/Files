@@ -1,4 +1,4 @@
-package mar.io.persistence
+package mar.io.file_explorer.persistence
 
 import java.nio.file.Path
 

@@ -1,14 +1,15 @@
-package mar.io.logic
+package mar.io.file_explorer.base_logic
 
 import com.sun.jna.platform.FileUtils
-import mar.io.gui.ExplorerGUI
-import mar.io.persistence.ExplorerPersistentState
-import mar.io.persistence.StorageManager
+import mar.io.file_explorer.gui.ExplorerGUI
+import mar.io.file_explorer.persistence.ExplorerPersistentState
+import mar.io.file_explorer.persistence.StorageManager
+import mar.io.file_explorer.task.file_paste.FilePasteManger
+import mar.io.file_explorer.task.file_paste.FilePasteBackgroundTask
 import java.awt.Desktop
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.util.*
 import javax.swing.JFrame
 import kotlin.io.path.*
 
@@ -130,6 +131,7 @@ class ExplorerController(
         // The try-catch will handle it and we give additional feedback to the user automatically
 //        if (newDir.isDirectory() && newDir.exists()) return false
         try {
+            // TODO: when name is empty, there is an accessdenied exception, because the program effectively tries to create a file at the same path as currentDir()
             newDir.createDirectory()
             reloadFileList(true, false)
             gui.trySelectFile(newDir)
@@ -183,7 +185,7 @@ class ExplorerController(
     }
 
     /**
-     * Starts a [FilePasteHandler] as a background operation at first. If it takes to long, it will block the main frame
+     * Starts a [FilePasteManger] as a background operation at first. If it takes to long, it will block the main frame
      * and show a progress bar. The user can then minimize it to continue in the background again. If there are any
      * errors, the blocking frame will pop up again and prompt the user on how to proceed.
      *
@@ -193,10 +195,10 @@ class ExplorerController(
      */
     @OptIn(ExperimentalPathApi::class)
     fun startFilePasteTask(srcFileList: List<Path>, deleteSourceFiles: Boolean) {
-        val mode: FilePasteHandler.CollisionMode =
-            if (srcFileList.size == 1) FilePasteHandler.CollisionMode.CREATE_SIBLING else FilePasteHandler.CollisionMode.RETRY
-        val op = FilePasteHandler(srcFileList, currentDir(), deleteSourceFiles, mode)
-        val c = FilePasteTask(this, op)
+        val mode: FilePasteManger.CollisionStrategy =
+            if (srcFileList.size == 1) FilePasteManger.CollisionStrategy.CREATE_SIBLING else FilePasteManger.CollisionStrategy.RETRY
+        val op = FilePasteManger(srcFileList, currentDir(), deleteSourceFiles, mode)
+        val c = FilePasteBackgroundTask(this, op)
         c.start()
     }
 
@@ -244,4 +246,14 @@ class ExplorerController(
         storage.write(makePersistentState())
         // favorites are handled during runtime
     }
+
+    /*
+     * TODO
+     * There should be a small info-area that shows all current background tasks:
+     * - the progress
+     * - reporting any errors in a a non-invasive way to the user (show a little icon).
+     * Formatting of this is TBD (progress bar, percentage, both?)
+     * 
+     * At the end of the day most file operations, that could take longer and are not strictly required for the app to run, should be background tasks.
+     */
 }

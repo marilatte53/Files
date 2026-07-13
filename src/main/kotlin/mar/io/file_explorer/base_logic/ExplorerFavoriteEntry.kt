@@ -1,4 +1,4 @@
-package mar.io.logic
+package mar.io.file_explorer.base_logic
 
 import java.nio.file.Path
 

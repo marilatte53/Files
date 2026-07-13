@@ -1,4 +1,4 @@
-package mar.io
+package mar.io.file_explorer
 
 import java.awt.Desktop
 import java.awt.event.ActionEvent

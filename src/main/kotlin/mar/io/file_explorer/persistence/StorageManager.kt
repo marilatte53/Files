@@ -1,8 +1,8 @@
-package mar.io.persistence
+package mar.io.file_explorer.persistence
 
-import mar.io.logic.ExplorerController
-import mar.io.logic.ExplorerFavoriteEntry
-import mar.io.logic.ExplorerState
+import mar.io.file_explorer.base_logic.ExplorerController
+import mar.io.file_explorer.base_logic.ExplorerFavoriteEntry
+import mar.io.file_explorer.base_logic.ExplorerState
 import java.io.Writer
 import java.nio.file.Files
 import java.nio.file.Path

@@ -1,22 +1,35 @@
-package mar.io.gui
+package mar.io.file_explorer.task.file_paste
 
-import mar.io.logic.FilePasteHandler
-import mar.io.logic.FilePasteTask
 import java.awt.Color
 import java.awt.Component
 import java.awt.Dialog
 import java.awt.Dimension
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
-import javax.swing.*
+import java.util.LinkedList
+import javax.swing.BorderFactory
+import javax.swing.BoxLayout
+import javax.swing.JButton
+import javax.swing.JComponent
+import javax.swing.JDialog
+import javax.swing.JFrame
+import javax.swing.JLabel
+import javax.swing.JPanel
+import javax.swing.JTextArea
+import javax.swing.SwingUtilities
 import kotlin.io.path.absolutePathString
 
-class FilePasteTaskGUI(frame: JFrame, task: FilePasteTask) {
+class FilePasteTaskGUI(frame: JFrame, task: FilePasteBackgroundTask) {
     private val rootPanel: JPanel
     private val collisionPanel: JPanel
     private val collisionTxt: JTextArea
     private val errorComponentIndex: Int
     private val dialog: JDialog
+
+    // TODO: remove this queue. Instead, have the task only give a sinlge op to the GUI.
+    // After choosing an option, discard all previous collisions. Only consider errors or wait for the next collisions to happen.
+    // Because otherwise we could show the user a collision that is resolved while they choose an option.
+    protected val incompleteOperationsQueue: LinkedList<FilePasteManger.PasteOperation> = LinkedList()
 
     init {
         dialog = JDialog(frame)
@@ -52,7 +65,7 @@ class FilePasteTaskGUI(frame: JFrame, task: FilePasteTask) {
             it.layout = BoxLayout(it, BoxLayout.Y_AXIS)
             it.border = BorderFactory.createEmptyBorder(5, 0, 0, 0)
             it.alignmentX = Component.LEFT_ALIGNMENT
-            val createBtn: (String, FilePasteHandler.CollisionMode) -> JButton = create@{ name, mode ->
+            val createBtn: (String, FilePasteManger.CollisionStrategy) -> JButton = create@{ name, mode ->
                 return@create JButton(name).also { btn ->
                     btn.addActionListener { task.resumeAfterCollision(mode) }
                     btn.maximumSize = Dimension(Integer.MAX_VALUE, btn.maximumSize.height)
@@ -60,9 +73,9 @@ class FilePasteTaskGUI(frame: JFrame, task: FilePasteTask) {
                 }
             }
             it.add(collisionTxt)
-            it.add(createBtn("Retry", FilePasteHandler.CollisionMode.RETRY))
-            it.add(createBtn("Create Sibling", FilePasteHandler.CollisionMode.CREATE_SIBLING))
-            it.add(createBtn("Skip", FilePasteHandler.CollisionMode.MARK_RESOLVED))
+            it.add(createBtn("Retry", FilePasteManger.CollisionStrategy.RETRY))
+            it.add(createBtn("Create Sibling", FilePasteManger.CollisionStrategy.CREATE_SIBLING))
+            it.add(createBtn("Skip", FilePasteManger.CollisionStrategy.MARK_RESOLVED))
         }
         val cancelBtn = JButton("Cancel").also {
             it.addActionListener { task.cancel() }
@@ -80,14 +93,14 @@ class FilePasteTaskGUI(frame: JFrame, task: FilePasteTask) {
         dialog.pack()
     }
 
-    fun setCollisionErrorAndPromptUser(op: FilePasteHandler.PasteOperation) = SwingUtilities.invokeLater {
+    fun promptUserForCollision(op: FilePasteManger.PasteOperation) = SwingUtilities.invokeLater {
         collisionTxt.text = """
             File Collision detected:
             src: ${op.srcFile.absolutePathString()}
             dst: ${op.actualTarget.absolutePathString()}
         """.trimIndent()
         // TODO: think about & eventually introduce options to handle multiple collisions at a time.
-        // Either set the mode for all collisions or make the option dependinng on collision type
+        // Either set the mode for all collisions or make the option depending on collision type
         rootPanel.add(collisionPanel, errorComponentIndex)
         rootPanel.revalidate()
         rootPanel.repaint()
@@ -95,16 +108,19 @@ class FilePasteTaskGUI(frame: JFrame, task: FilePasteTask) {
         dialog.isVisible = true
     }
 
-    fun setGeneralError(op: FilePasteHandler.PasteOperation) {
+    fun addIncompleteOperation(op: FilePasteManger.PasteOperation) {
+        incompleteOperationsQueue.addLast(op)
+    }
+
+    fun promptUserForError(op: FilePasteManger.PasteOperation) {
         // TODO: Make a display for general errors.
         dialog.isVisible = true
     }
 
-    fun removeError() = SwingUtilities.invokeLater {
-        // TODO: think of something (what should this even do?)
+    fun removeError() {
     }
 
-    fun destroy() = SwingUtilities.invokeLater {
+    fun destroy() {
         dialog.dispose()
     }
 }

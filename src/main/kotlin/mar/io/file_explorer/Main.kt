@@ -1,6 +1,6 @@
-package mar.io
+package mar.io.file_explorer
 
-import mar.io.logic.ExplorerController
+import mar.io.file_explorer.base_logic.ExplorerController
 import javax.swing.JFrame
 import javax.swing.WindowConstants
 

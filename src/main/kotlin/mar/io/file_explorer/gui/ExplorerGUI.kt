@@ -1,8 +1,8 @@
-package mar.io.gui
+package mar.io.file_explorer.gui
 
-import mar.io.action
-import mar.io.logic.ExplorerController
-import mar.io.put
+import mar.io.file_explorer.action
+import mar.io.file_explorer.base_logic.ExplorerController
+import mar.io.file_explorer.put
 import java.awt.*
 import java.awt.event.*
 import java.nio.file.Path
@@ -33,7 +33,8 @@ class ExplorerGUI(
         .then(Comparator.naturalOrder())
 
     val rootPanel: JPanel = JPanel()
-    val fileList: JList<Path> = JList() // TODO: use table instead and add detail columns
+    // TODO: Implement a list that shows more information about the individual files, for example using a table or a custom List Entry
+    val fileList: JList<Path> = JList()
     val fileListModel: DefaultListModel<Path> = DefaultListModel()
     val addressBar = JTextField()
 
@@ -88,7 +89,6 @@ class ExplorerGUI(
         val uiFileScroller = JScrollPane(fileList)
         uiFileScroller.horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
         rootPanel.add(uiFileScroller, BorderLayout.CENTER)
-        // TODO: change the font?
         rootPanel.add(filterBar, BorderLayout.SOUTH)
     }
 
@@ -108,7 +108,10 @@ class ExplorerGUI(
         }
         fileList.cellRenderer =
             object : DefaultListCellRenderer() {
-                // TODO: better icons + more different icons
+                // TODO: Add more icons based on different file types, possibly using custom ones.
+                // also add a "fallback" icon
+                // mark hidden files
+                // TODO: mark copied and cut files, so the user is able to differentiate these two
                 override fun getListCellRendererComponent(
                     list: JList<*>?,
                     path: Any,
@@ -362,7 +365,7 @@ class ExplorerGUI(
         val cb = Toolkit.getDefaultToolkit().systemClipboard
         CutOrCopyFileListTransferable.getOrNull(cb)?.let { t ->
             runCatching {
-                // TODO: review this process; show progress bar, or make that information otherwise accessible
+                // TODO Implement this paste operation as such background task.
                 controller.startFilePasteTask(t.copiedPaths, t.isCutOperation)
             }.onFailure {
                 showErrorDialog("File Paste Init", "Failed to initialize file paste operation:", it)

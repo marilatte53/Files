@@ -1,4 +1,4 @@
-package mar.io.gui
+package mar.io.file_explorer.gui
 
 import java.awt.datatransfer.Clipboard
 import java.awt.datatransfer.DataFlavor
@@ -11,6 +11,7 @@ class CutOrCopyFileListTransferable(
     val copiedPaths: List<Path>,
     val isCutOperation: Boolean = false
 ) : Transferable {
+    // TODO: use this in the controller instead of the GUI
     companion object {
         val CUT_FILE_LIST_FLAVOR =
             DataFlavor("application/x-java-cut-path-list;class=java.util.List", "List of Paths (cut)")

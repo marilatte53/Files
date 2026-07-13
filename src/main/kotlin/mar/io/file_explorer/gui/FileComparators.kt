@@ -1,4 +1,4 @@
-package mar.io.gui
+package mar.io.file_explorer.gui
 
 import java.nio.file.Path
 import kotlin.io.path.isDirectory

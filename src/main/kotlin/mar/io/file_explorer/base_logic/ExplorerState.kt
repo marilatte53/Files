@@ -1,7 +1,6 @@
-package mar.io.logic
+package mar.io.file_explorer.base_logic
 
-import mar.io.logic.ExplorerController
-import mar.io.persistence.StorageManager
+import mar.io.file_explorer.persistence.StorageManager
 import java.nio.file.Path
 import java.time.Instant
 
